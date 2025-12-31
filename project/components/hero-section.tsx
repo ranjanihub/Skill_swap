@@ -28,8 +28,9 @@ export default function HeroSection() {
   };
 
   return (
-    <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-gradient-to-br from-skillswap-dark via-skillswap-800 to-skillswap-700">
+    <section className="relative py-20 sm:py-24 lg:py-32 overflow-hidden bg-gradient-to-br from-skillswap-dark via-skillswap-800 to-skillswap-700">
       <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxwYXRoIGQ9Ik0zNiAxOGMzLjMxNCAwIDYgMi42ODYgNiA2cy0yLjY4NiA2LTYgNi02LTIuNjg2LTYtNiAyLjY4Ni02IDYtNnoiIHN0cm9rZT0icmdiYSgyNTUsMjU1LDI1NSwwLjAzKSIgc3Ryb2tlLXdpZHRoPSIyIi8+PC9nPjwvc3ZnPg==')] opacity-30"></div>
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 sm:h-28 lg:h-32 bg-gradient-to-b from-transparent to-white" />
 
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 text-center">
         <div className="inline-flex items-center gap-2 px-4 py-2 bg-skillswap-500/20 border border-skillswap-400/30 rounded-full mb-8 backdrop-blur-sm">
@@ -42,7 +43,7 @@ export default function HeroSection() {
         <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold text-white mb-6 leading-tight">
           Exchange Skills,
           <br />
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-skillswap-100 via-skillswap-200 to-skillswap-300">
+          <span>
             Unlock Potential
           </span>
         </h1>
@@ -61,7 +62,7 @@ export default function HeroSection() {
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
           <Button
             size="lg"
-            className="bg-skillswap-100 text-skillswap-dark hover:bg-skillswap-200 transition-all duration-300 shadow-lg hover:shadow-skillswap-100/50 hover:scale-105 font-semibold px-8 py-6 text-lg group disabled:opacity-75 disabled:cursor-not-allowed"
+            className="bg-skillswap-100 text-skillswap-dark hover:bg-skillswap-200 transition-all duration-500 shadow-lg hover:shadow-skillswap-100/50 hover:scale-105 font-semibold px-8 py-6 text-lg group disabled:opacity-75 disabled:cursor-not-allowed"
             aria-label="Get started with SkillSwap"
             onClick={handleGetStarted}
             disabled={isNavigating}
@@ -73,7 +74,7 @@ export default function HeroSection() {
           <Button
             size="lg"
             variant="outline"
-            className="border-2 border-skillswap-200 text-skillswap-100 hover:bg-skillswap-200/10 hover:border-skillswap-100 transition-all duration-300 font-semibold px-8 py-6 text-lg backdrop-blur-sm"
+            className="border-2 border-skillswap-200 text-skillswap-100 hover:bg-skillswap-200/10 hover:border-skillswap-100 transition-all duration-500 font-semibold px-8 py-6 text-lg backdrop-blur-sm"
             aria-label="Learn more about SkillSwap"
             onClick={handleLearnMore}
           >
@@ -82,7 +83,7 @@ export default function HeroSection() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 max-w-4xl mx-auto">
-          <div className="flex flex-col items-center p-6 bg-skillswap-800/50 backdrop-blur-sm rounded-xl border border-skillswap-600/30 hover:border-skillswap-400/50 transition-all duration-300 hover:transform hover:scale-105">
+          <div className="flex flex-col items-center p-6 bg-skillswap-800/50 backdrop-blur-sm rounded-xl border border-skillswap-600/30 hover:border-skillswap-400/50 transition-all duration-500 hover:transform hover:scale-105">
             <div className="w-12 h-12 bg-skillswap-500/20 rounded-full flex items-center justify-center mb-4">
               <Users className="w-6 h-6 text-skillswap-200" />
             </div>
@@ -90,7 +91,7 @@ export default function HeroSection() {
             <p className="text-skillswap-300 text-sm">Active Learners</p>
           </div>
 
-          <div className="flex flex-col items-center p-6 bg-skillswap-800/50 backdrop-blur-sm rounded-xl border border-skillswap-600/30 hover:border-skillswap-400/50 transition-all duration-300 hover:transform hover:scale-105">
+          <div className="flex flex-col items-center p-6 bg-skillswap-800/50 backdrop-blur-sm rounded-xl border border-skillswap-600/30 hover:border-skillswap-400/50 transition-all duration-500 hover:transform hover:scale-105">
             <div className="w-12 h-12 bg-skillswap-500/20 rounded-full flex items-center justify-center mb-4">
               <Zap className="w-6 h-6 text-skillswap-200" />
             </div>
@@ -98,7 +99,7 @@ export default function HeroSection() {
             <p className="text-skillswap-300 text-sm">Skills Available</p>
           </div>
 
-          <div className="flex flex-col items-center p-6 bg-skillswap-800/50 backdrop-blur-sm rounded-xl border border-skillswap-600/30 hover:border-skillswap-400/50 transition-all duration-300 hover:transform hover:scale-105">
+          <div className="flex flex-col items-center p-6 bg-skillswap-800/50 backdrop-blur-sm rounded-xl border border-skillswap-600/30 hover:border-skillswap-400/50 transition-all duration-500 hover:transform hover:scale-105">
             <div className="w-12 h-12 bg-skillswap-500/20 rounded-full flex items-center justify-center mb-4">
               <svg
                 className="w-6 h-6 text-skillswap-200"
@@ -120,8 +121,6 @@ export default function HeroSection() {
           </div>
         </div>
       </div>
-
-      <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-white to-transparent"></div>
     </section>
   );
 }

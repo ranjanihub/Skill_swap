@@ -183,7 +183,7 @@ export default function LoginPage() {
             <Button
               type="submit"
               disabled={loading || googleLoading}
-              className="w-full bg-skillswap-500 text-white hover:bg-skillswap-600 py-6 text-base font-semibold transition-all duration-300 disabled:opacity-75 disabled:cursor-not-allowed"
+              className="w-full bg-skillswap-cta text-white hover:bg-skillswap-700 py-6 text-base font-semibold transition-all duration-300 shadow-lg hover:shadow-skillswap-cta/30 focus-visible:ring-skillswap-cta disabled:opacity-75 disabled:cursor-not-allowed"
               aria-label="Sign in with email and password"
             >
               {loading ? 'Signing in...' : 'Sign In'}

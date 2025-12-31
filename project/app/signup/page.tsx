@@ -16,6 +16,7 @@ export default function SignupPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const role = 'both';
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -68,7 +69,7 @@ export default function SignupPage() {
 
     try {
       setLoading(true);
-      await signUp(email, password);
+      await signUp(email, password, fullName, role);
       setSuccess('Account created! Redirecting to dashboard...');
       setTimeout(() => {
         router.push('/dashboard');
@@ -249,7 +250,7 @@ export default function SignupPage() {
             <Button
               type="submit"
               disabled={loading || googleLoading}
-              className="w-full bg-skillswap-500 text-white hover:bg-skillswap-600 py-6 text-base font-semibold transition-all duration-300 disabled:opacity-75 disabled:cursor-not-allowed"
+              className="w-full bg-skillswap-cta text-white hover:bg-skillswap-700 py-6 text-base font-semibold transition-all duration-300 shadow-lg hover:shadow-skillswap-cta/30 focus-visible:ring-skillswap-cta disabled:opacity-75 disabled:cursor-not-allowed"
               aria-label="Create account"
             >
               {loading ? 'Creating account...' : 'Create Account'}

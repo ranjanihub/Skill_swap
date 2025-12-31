@@ -58,7 +58,7 @@ export default function HowItWorks() {
                   <div className="flex flex-col h-full">
                     <div className="flex items-center justify-between mb-6">
                       <div className="flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-skillswap-300 to-skillswap-400 group-hover:from-skillswap-400 group-hover:to-skillswap-500 transition-all duration-300 shadow-lg">
-                        <IconComponent className="w-8 h-8 text-white" />
+                        <IconComponent className="w-8 h-8 text-skillswap-900" />
                       </div>
                       <div className="flex items-center justify-center w-10 h-10 rounded-full bg-skillswap-100 text-skillswap-600 font-bold text-lg group-hover:bg-skillswap-200 transition-all duration-300">
                         {index + 1}
@@ -132,7 +132,7 @@ export default function HowItWorks() {
                 getStartedButton.click();
               }
             }}
-            className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-skillswap-500 to-skillswap-600 text-white font-semibold rounded-lg hover:from-skillswap-600 hover:to-skillswap-700 transition-all duration-300 shadow-lg hover:shadow-skillswap-500/30 hover:scale-105 active:scale-95"
+            className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-skillswap-500 to-skillswap-600 text-skillswap-900 font-semibold rounded-lg hover:from-skillswap-600 hover:to-skillswap-700 transition-all duration-300 shadow-lg hover:shadow-skillswap-500/30 hover:scale-105 active:scale-95"
             aria-label="Get started with SkillSwap from how it works section"
           >
             Get Started Today
