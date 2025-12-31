@@ -1,0 +1,85 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-start-rgb: 214, 219, 220;
+  --background-end-rgb: 255, 255, 255;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --foreground-rgb: 255, 255, 255;
+    --background-start-rgb: 0, 0, 0;
+    --background-end-rgb: 0, 0, 0;
+  }
+}
+
+@layer base {
+  :root {
+    --background: 330 33.3% 87.5%;
+    --foreground: 336 54.5% 15.7%;
+    --card: 327 57.1% 78%;
+    --card-foreground: 336 54.5% 15.7%;
+    --popover: 330 33.3% 87.5%;
+    --popover-foreground: 336 54.5% 15.7%;
+    --primary: 344 28.3% 52.2%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 327 57.1% 78%;
+    --secondary-foreground: 336 54.5% 15.7%;
+    --muted: 330 33.3% 87.5%;
+    --muted-foreground: 336 54.5% 35%;
+    --accent: 344 75.6% 24.3%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 336 30% 65%;
+    --input: 330 33.3% 87.5%;
+    --ring: 344 28.3% 52.2%;
+    --chart-1: 344 28.3% 52.2%;
+    --chart-2: 327 57.1% 78%;
+    --chart-3: 344 75.6% 24.3%;
+    --chart-4: 336 54.5% 15.7%;
+    --chart-5: 330 33.3% 87.5%;
+    --radius: 0.5rem;
+  }
+  .dark {
+    --background: 336 54.5% 20%;
+    --foreground: 330 33.3% 87.5%;
+    --card: 336 54.5% 25%;
+    --card-foreground: 330 33.3% 87.5%;
+    --popover: 336 54.5% 20%;
+    --popover-foreground: 330 33.3% 87.5%;
+    --primary: 327 57.1% 78%;
+    --primary-foreground: 336 54.5% 15.7%;
+    --secondary: 327 57.1% 65%;
+    --secondary-foreground: 336 54.5% 15.7%;
+    --muted: 336 54.5% 35%;
+    --muted-foreground: 330 33.3% 80%;
+    --accent: 330 33.3% 87.5%;
+    --accent-foreground: 336 54.5% 15.7%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 336 54.5% 30%;
+    --input: 336 54.5% 25%;
+    --ring: 327 57.1% 78%;
+    --chart-1: 344 28.3% 52.2%;
+    --chart-2: 327 57.1% 78%;
+    --chart-3: 344 75.6% 24.3%;
+    --chart-4: 336 54.5% 15.7%;
+    --chart-5: 330 33.3% 87.5%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+}
