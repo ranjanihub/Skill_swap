@@ -109,7 +109,7 @@ export default function DashboardPage() {
 
   if (authLoading || loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-skillswap-100 to-white">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-skillswap-100 to-skillswap-50">
         <div className="flex flex-col items-center gap-4">
           <div className="w-12 h-12 border-4 border-skillswap-200 border-t-skillswap-500 rounded-full animate-spin"></div>
           <p className="text-skillswap-600">Loading dashboard...</p>
@@ -120,7 +120,7 @@ export default function DashboardPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-skillswap-100 to-white px-4">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-skillswap-100 to-skillswap-50 px-4">
         <Card className="p-8 max-w-md border-red-200">
           <p className="text-red-700 mb-4">{error}</p>
           <Button
@@ -140,8 +140,8 @@ export default function DashboardPage() {
   const learnSkills = skills.filter((s) => s.skill_type === 'learn');
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-skillswap-100 via-white to-skillswap-50">
-      <header className="bg-white shadow-sm border-b border-skillswap-200">
+    <div className="min-h-screen bg-gradient-to-br from-skillswap-100 via-skillswap-50 to-skillswap-50">
+      <header className="bg-skillswap-300 border-b border-skillswap-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
             <div>

@@ -18,30 +18,34 @@
 
 @layer base {
   :root {
-    --background: 330 33.3% 87.5%;
-    --foreground: 336 54.5% 15.7%;
-    --card: 327 57.1% 78%;
-    --card-foreground: 336 54.5% 15.7%;
-    --popover: 330 33.3% 87.5%;
-    --popover-foreground: 336 54.5% 15.7%;
-    --primary: 344 28.3% 52.2%;
+    /* Reference palette (from `public/ref.svg`) */
+    --background: 332.7 100% 97.8%; /* #FFF4F9 */
+    --foreground: 339.7 100% 12.2%; /* #3E0015 */
+
+    --card: 0 0% 100%;
+    --card-foreground: 339.7 100% 12.2%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 339.7 100% 12.2%;
+
+    --primary: 339.5 100% 32.2%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 327 57.1% 78%;
-    --secondary-foreground: 336 54.5% 15.7%;
-    --muted: 330 33.3% 87.5%;
-    --muted-foreground: 336 54.5% 35%;
-    --accent: 344 75.6% 24.3%;
+    --secondary: 343.1 73.6% 89.6%; /* #F8D1DC */
+    --secondary-foreground: 339.7 100% 12.2%;
+    --muted: 344 88.2% 96.7%; /* #FEEFF3 */
+    --muted-foreground: 339.7 100% 12.2%;
+    --accent: 339.7 100% 12.2%;
     --accent-foreground: 0 0% 100%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
-    --border: 336 30% 65%;
-    --input: 330 33.3% 87.5%;
-    --ring: 344 28.3% 52.2%;
-    --chart-1: 344 28.3% 52.2%;
-    --chart-2: 327 57.1% 78%;
-    --chart-3: 344 75.6% 24.3%;
-    --chart-4: 336 54.5% 15.7%;
-    --chart-5: 330 33.3% 87.5%;
+    --border: 343.3 52.9% 86.7%; /* #EFCBD5 */
+    --input: 343.3 52.9% 86.7%;
+    --ring: 339.5 100% 32.2%;
+
+    --chart-1: 339.5 100% 32.2%;
+    --chart-2: 343.1 73.6% 89.6%;
+    --chart-3: 339.7 100% 12.2%;
+    --chart-4: 343.3 52.9% 86.7%;
+    --chart-5: 344 88.2% 96.7%;
     --radius: 0.5rem;
   }
   .dark {
@@ -77,7 +81,8 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply text-foreground;
+    background: linear-gradient(180deg, #FFF4F9 0%, #EFCBD5 100%);
   }
   html {
     scroll-behavior: smooth;

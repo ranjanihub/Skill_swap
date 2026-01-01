@@ -59,9 +59,9 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-skillswap-100 via-white to-skillswap-200 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-skillswap-100 via-skillswap-50 to-skillswap-200 px-4 sm:px-6 lg:px-8">
       <div className="w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-xl p-8 sm:p-10">
+        <div className="bg-card rounded-2xl shadow-xl p-8 sm:p-10">
           <div className="text-center mb-8">
             <h1 className="text-3xl sm:text-4xl font-bold text-skillswap-dark mb-2">
               Reset Password

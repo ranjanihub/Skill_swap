@@ -61,11 +61,24 @@ const config: Config = {
           '5': 'hsl(var(--chart-5))',
         },
         skillswap: {
-          primary: '#A24C61',
-          secondary: '#E2A9C0',
-          background: '#E1C9D5',
-          text: '#411528',
-          cta: '#710C21',
+          // Reference palette (from `public/ref.svg`)
+          50: '#FFF4F9', // bg start
+          100: '#FEEFF3',
+          200: '#EFCBD5', // borders
+          300: '#F8D1DC', // header fill
+          400: '#F8D1DC',
+          500: '#A40038', // accent
+          600: '#A40038',
+          700: '#A40038',
+          800: '#3E0015', // deep text
+          900: '#3E0015',
+          dark: '#3E0015',
+
+          primary: '#A40038',
+          secondary: '#F8D1DC',
+          background: '#FFF4F9',
+          text: '#3E0015',
+          cta: '#A40038',
         },
       },
       keyframes: {
