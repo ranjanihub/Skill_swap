@@ -239,9 +239,9 @@ await supabase.from('skills').insert({
 
 ## Next Steps to Extend
 
-1. **Skills Management** (`/dashboard/skills`) - Full CRUD for skills
+1. **Skills Management** (`/dashboard` → `#skills`) - Expand inline CRUD for skills
 2. **User Profiles** (`/dashboard/profile`) - View and edit user info
-3. **Explore Users** (`/dashboard/explore`) - Discover peers with matching skills
+3. **Explore Users** (`/explore`) - Discover peers with matching skills
 4. **Messaging** - Real-time chat between users
 5. **Session Management** (`/dashboard/sessions`) - Schedule and manage exchanges
 6. **Reviews & Ratings** - Post-session feedback system

@@ -10,7 +10,7 @@ import { Eye, EyeOff } from 'lucide-react';
 
 export default function SignupPage() {
   const router = useRouter();
-  const { signUp, signInWithGoogle } = useAuth();
+  const { signUp, signInWithGoogle, configError } = useAuth();
 
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -65,15 +65,28 @@ export default function SignupPage() {
     setError('');
     setSuccess('');
 
+    if (configError) {
+      setError(configError);
+      return;
+    }
+
     if (!validateForm()) return;
 
     try {
       setLoading(true);
-      await signUp(email, password, fullName, role);
-      setSuccess('Account created! Redirecting to dashboard...');
-      setTimeout(() => {
-        router.push('/dashboard');
-      }, 2000);
+      const result = await signUp(email, password, fullName, role);
+
+      if (result.signedIn) {
+        setSuccess('Account created! Redirecting to dashboard...');
+        setTimeout(() => {
+          router.push('/dashboard');
+        }, 1200);
+      } else {
+        setSuccess('Account created! Please check your email to confirm your account, then log in.');
+        setTimeout(() => {
+          router.push('/login');
+        }, 1600);
+      }
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : 'Signup failed. Please try again.';
@@ -109,9 +122,9 @@ export default function SignupPage() {
             </p>
           </div>
 
-          {error && (
+          {(configError || error) && (
             <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-sm text-red-700">{error}</p>
+              <p className="text-sm text-red-700">{configError || error}</p>
             </div>
           )}
 
@@ -249,7 +262,7 @@ export default function SignupPage() {
 
             <Button
               type="submit"
-              disabled={loading || googleLoading}
+              disabled={loading || googleLoading || Boolean(configError)}
               className="w-full bg-skillswap-cta text-white hover:bg-skillswap-700 py-6 text-base font-semibold transition-all duration-300 shadow-lg hover:shadow-skillswap-cta/30 focus-visible:ring-skillswap-cta disabled:opacity-75 disabled:cursor-not-allowed"
               aria-label="Create account"
             >

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
+import { isSupabaseConfigured, supabase, supabaseConfigError } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ArrowLeft } from 'lucide-react';
@@ -29,6 +29,11 @@ export default function ForgotPasswordPage() {
     e.preventDefault();
     setError('');
     setSuccess('');
+
+    if (!isSupabaseConfigured) {
+      setError(supabaseConfigError ?? 'Supabase is not configured');
+      return;
+    }
 
     if (!validateEmail()) return;
 
@@ -109,7 +114,7 @@ export default function ForgotPasswordPage() {
 
               <Button
                 type="submit"
-                disabled={loading}
+                disabled={loading || !isSupabaseConfigured}
                 className="w-full bg-skillswap-500 text-white hover:bg-skillswap-600 py-6 text-base font-semibold transition-all duration-300 disabled:opacity-75 disabled:cursor-not-allowed"
                 aria-label="Send password reset email"
               >

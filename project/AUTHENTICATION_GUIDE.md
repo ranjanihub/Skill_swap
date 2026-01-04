@@ -304,9 +304,9 @@ const { error } = await supabase
 
 To extend the platform:
 
-1. **Skills Management** - Create `/dashboard/skills` page for adding/editing skills
+1. **Skills Management** - Expand the inline skills setup on `/dashboard` (see `#skills`) with richer tagging, validation, and suggestions
 2. **User Profiles** - Build `/dashboard/profile` for viewing and editing user info
-3. **Explore** - Implement `/dashboard/explore` to find other users
+3. **Explore** - Extend `/explore` to support filtering, matching, and swap requests
 4. **Messaging** - Add real-time chat between users
 5. **Reviews** - Add rating and review system for sessions
 6. **Notifications** - Implement real-time notifications

@@ -11,7 +11,7 @@ import { Eye, EyeOff } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { signIn, signInWithGoogle } = useAuth();
+  const { signIn, signInWithGoogle, resendSignupConfirmation, configError } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -20,6 +20,8 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
+  const [canResend, setCanResend] = useState(false);
 
   const validateForm = () => {
     if (!email) {
@@ -44,6 +46,13 @@ export default function LoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setInfo('');
+    setCanResend(false);
+
+    if (configError) {
+      setError(configError);
+      return;
+    }
 
     if (!validateForm()) return;
 
@@ -54,6 +63,38 @@ export default function LoginPage() {
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : 'Login failed. Please try again.';
+
+      // Supabase commonly returns "Invalid login credentials" when the user exists
+      // but hasn't confirmed their email yet (depending on auth settings).
+      const maybeNeedsConfirmation =
+        /invalid login credentials/i.test(errorMessage) ||
+        /email.*not.*confirmed/i.test(errorMessage) ||
+        /confirm.*your.*email/i.test(errorMessage);
+
+      setError(errorMessage);
+      if (maybeNeedsConfirmation) {
+        setInfo(
+          'If you just signed up, you may need to confirm your email before logging in. Check your inbox (and spam) or resend the confirmation email.'
+        );
+        setCanResend(Boolean(email.trim()));
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendConfirmation = async () => {
+    setError('');
+    setInfo('');
+
+    try {
+      setLoading(true);
+      await resendSignupConfirmation(email);
+      setInfo('Confirmation email sent. Please check your inbox (and spam).');
+      setCanResend(false);
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : 'Failed to resend confirmation email.';
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -86,9 +127,21 @@ export default function LoginPage() {
             </p>
           </div>
 
-          {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-sm text-red-700">{error}</p>
+          {(configError || error) && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg space-y-3">
+              <p className="text-sm text-red-700">{configError || error}</p>
+              {info && <p className="text-sm text-skillswap-600">{info}</p>}
+              {canResend && !configError && (
+                <Button
+                  type="button"
+                  onClick={handleResendConfirmation}
+                  disabled={loading || googleLoading || !email}
+                  variant="outline"
+                  className="border-skillswap-200 text-skillswap-600 hover:bg-skillswap-50"
+                >
+                  Resend confirmation email
+                </Button>
+              )}
             </div>
           )}
 
@@ -182,7 +235,7 @@ export default function LoginPage() {
 
             <Button
               type="submit"
-              disabled={loading || googleLoading}
+              disabled={loading || googleLoading || Boolean(configError)}
               className="w-full bg-skillswap-cta text-white hover:bg-skillswap-700 py-6 text-base font-semibold transition-all duration-300 shadow-lg hover:shadow-skillswap-cta/30 focus-visible:ring-skillswap-cta disabled:opacity-75 disabled:cursor-not-allowed"
               aria-label="Sign in with email and password"
             >
@@ -202,7 +255,7 @@ export default function LoginPage() {
           <Button
             type="button"
             onClick={handleGoogleSignIn}
-            disabled={loading || googleLoading}
+            disabled={loading || googleLoading || Boolean(configError)}
             className="w-full border-2 border-skillswap-200 text-skillswap-dark hover:bg-skillswap-50 py-6 text-base font-semibold transition-all duration-300 disabled:opacity-75 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             aria-label="Sign in with Google"
           >

@@ -66,7 +66,7 @@ export default function HowItWorks() {
                 getStartedButton.click();
               }
             }}
-            className="mt-5 inline-flex items-center justify-center h-10 px-10 rounded-md border border-skillswap-800 bg-white text-skillswap-dark text-xs font-semibold"
+            className="mt-5 inline-flex items-center justify-center h-10 px-10 rounded-md bg-gradient-to-r from-skillswap-dark to-skillswap-500 text-white text-xs font-semibold hover:from-skillswap-800 hover:to-skillswap-600"
             aria-label="Get started with SkillSwap from how it works section"
           >
             Get Started

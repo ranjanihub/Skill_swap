@@ -67,8 +67,8 @@ export function Navbar() {
             <Button
               asChild
               className={cn(
-                'bg-skillswap-dark text-white hover:bg-skillswap-800',
-                loading && 'bg-skillswap-800'
+                'bg-gradient-to-r from-skillswap-dark to-skillswap-500 text-white hover:from-skillswap-800 hover:to-skillswap-600',
+                loading && 'from-skillswap-800 to-skillswap-600'
               )}
               disabled={loading}
               aria-busy={loading}

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-import { supabase } from '@/lib/supabase';
+import { isSupabaseConfigured, supabase, supabaseConfigError } from '@/lib/supabase';
 
 export default function AuthCallbackPage() {
   const router = useRouter();
@@ -12,6 +12,11 @@ export default function AuthCallbackPage() {
 
   useEffect(() => {
     const run = async () => {
+      if (!isSupabaseConfigured) {
+        setMessage(supabaseConfigError ?? 'Supabase is not configured');
+        return;
+      }
+
       const errorDescription = searchParams.get('error_description');
       if (errorDescription) {
         setMessage(errorDescription);

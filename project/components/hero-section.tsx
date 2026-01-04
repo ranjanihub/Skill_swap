@@ -47,8 +47,7 @@ export default function HeroSection() {
         <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
           <Button
             size="lg"
-            variant="outline"
-            className="border-skillswap-800 text-skillswap-dark hover:bg-skillswap-100 px-10"
+            className="bg-gradient-to-r from-skillswap-dark to-skillswap-500 text-white hover:from-skillswap-800 hover:to-skillswap-600 px-10"
             aria-label="Get started with SkillSwap"
             onClick={handleGetStarted}
             disabled={isNavigating}
@@ -58,7 +57,7 @@ export default function HeroSection() {
 
           <Button
             size="lg"
-            className="bg-skillswap-dark text-white hover:bg-skillswap-800 px-10"
+            className="bg-gradient-to-r from-skillswap-dark to-skillswap-500 text-white hover:from-skillswap-800 hover:to-skillswap-600 px-10"
             aria-label="Learn more about SkillSwap"
             onClick={handleLearnMore}
           >

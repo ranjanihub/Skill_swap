@@ -2,16 +2,23 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { Session, User } from '@supabase/supabase-js';
-import { supabase } from '@/lib/supabase';
+import { isSupabaseConfigured, supabase, supabaseConfigError } from '@/lib/supabase';
 
 interface AuthContextType {
   session: Session | null;
   user: User | null;
   loading: boolean;
-  signUp: (email: string, password: string, fullName: string, role: string) => Promise<void>;
+  configError: string | null;
+  signUp: (
+    email: string,
+    password: string,
+    fullName: string,
+    role: string
+  ) => Promise<{ signedIn: boolean }>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   signInWithGoogle: () => Promise<void>;
+  resendSignupConfirmation: (email: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -20,9 +27,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [configError, setConfigError] = useState<string | null>(supabaseConfigError);
 
   useEffect(() => {
     const initializeAuth = async () => {
+      if (!isSupabaseConfigured) {
+        setConfigError(supabaseConfigError);
+        setSession(null);
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+
       try {
         const { data } = await supabase.auth.getSession();
         setSession(data.session);
@@ -35,6 +51,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     initializeAuth();
+
+    if (!isSupabaseConfigured) {
+      return;
+    }
 
     const {
       data: { subscription },
@@ -49,7 +69,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const signUp = async (email: string, password: string, fullName: string, role: string) => {
+  const signUp = async (
+    email: string,
+    password: string,
+    fullName: string,
+    role: string
+  ) => {
+    if (!isSupabaseConfigured) {
+      throw new Error(supabaseConfigError ?? 'Supabase is not configured');
+    }
+
     const { error } = await supabase.auth.signUp({
       email,
       password,
@@ -61,9 +90,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
     });
     if (error) throw error;
+
+    const { data } = await supabase.auth.getSession();
+    return { signedIn: Boolean(data.session) };
   };
 
   const signIn = async (email: string, password: string) => {
+    if (!isSupabaseConfigured) {
+      throw new Error(supabaseConfigError ?? 'Supabase is not configured');
+    }
+
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -72,11 +108,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
+    if (!isSupabaseConfigured) {
+      throw new Error(supabaseConfigError ?? 'Supabase is not configured');
+    }
+
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
   };
 
   const signInWithGoogle = async () => {
+    if (!isSupabaseConfigured) {
+      throw new Error(supabaseConfigError ?? 'Supabase is not configured');
+    }
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
@@ -86,16 +130,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw error;
   };
 
+  const resendSignupConfirmation = async (email: string) => {
+    if (!isSupabaseConfigured) {
+      throw new Error(supabaseConfigError ?? 'Supabase is not configured');
+    }
+
+    const safeEmail = email.trim();
+    if (!safeEmail) {
+      throw new Error('Email is required');
+    }
+
+    // Supabase will only send this if email confirmations are enabled.
+    const { error } = await supabase.auth.resend({ type: 'signup', email: safeEmail });
+    if (error) throw error;
+  };
+
   return (
     <AuthContext.Provider
       value={{
         session,
         user,
         loading,
+        configError,
         signUp,
         signIn,
         signOut,
         signInWithGoogle,
+        resendSignupConfirmation,
       }}
     >
       {children}
