@@ -3,76 +3,76 @@
 @tailwind utilities;
 
 :root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
-  --background-end-rgb: 255, 255, 255;
+  --foreground-rgb: 165, 81, 102; /* #A55166 */
+  --background-start-rgb: 247, 218, 231; /* #F7DAE7 */
+  --background-end-rgb: 226, 180, 193; /* #E2B4C1 */
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 0, 0, 0;
-    --background-end-rgb: 0, 0, 0;
+    --foreground-rgb: 255, 255, 255; /* #FFFFFF */
+    --background-start-rgb: 165, 81, 102; /* #A55166 */
+    --background-end-rgb: 211, 140, 157; /* #D38C9D */
   }
 }
 
 @layer base {
   :root {
-    /* Reference palette (from `public/ref.svg`) */
-    --background: 332.7 100% 97.8%; /* #FFF4F9 */
-    --foreground: 339.7 100% 12.2%; /* #3E0015 */
+    /* Palette from provided image */
+    --background: 333.1 64.4% 91.2%; /* Pink Mist #F7DAE7 */
+    --foreground: 345 34.1% 48.2%; /* Ruby Petals #A55166 */
 
-    --card: 0 0% 100%;
-    --card-foreground: 339.7 100% 12.2%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 339.7 100% 12.2%;
+    --card: 0 0% 100%; /* White */
+    --card-foreground: 345 34.1% 48.2%;
+    --popover: 0 0% 100%; /* White */
+    --popover-foreground: 345 34.1% 48.2%;
 
-    --primary: 339.5 100% 32.2%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 343.1 73.6% 89.6%; /* #F8D1DC */
-    --secondary-foreground: 339.7 100% 12.2%;
-    --muted: 344 88.2% 96.7%; /* #FEEFF3 */
-    --muted-foreground: 339.7 100% 12.2%;
-    --accent: 339.7 100% 12.2%;
-    --accent-foreground: 0 0% 100%;
+    --primary: 345 34.1% 48.2%; /* Ruby Petals */
+    --primary-foreground: 0 0% 100%; /* White */
+    --secondary: 345.6 44.7% 68.8%; /* Cherry Soda #D38C9D */
+    --secondary-foreground: 0 0% 100%; /* White */
+    --muted: 343 44.2% 79.6%; /* Bubblegum #E2B4C1 */
+    --muted-foreground: 345 34.1% 48.2%;
+    --accent: 0 0% 100%; /* White (accent color) */
+    --accent-foreground: 345 34.1% 48.2%; /* Ruby Petals */
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
-    --border: 343.3 52.9% 86.7%; /* #EFCBD5 */
-    --input: 343.3 52.9% 86.7%;
-    --ring: 339.5 100% 32.2%;
+    --border: 343 44.2% 79.6%; /* Bubblegum */
+    --input: 343 44.2% 79.6%;
+    --ring: 345 34.1% 48.2%; /* Ruby Petals */
 
-    --chart-1: 339.5 100% 32.2%;
-    --chart-2: 343.1 73.6% 89.6%;
-    --chart-3: 339.7 100% 12.2%;
-    --chart-4: 343.3 52.9% 86.7%;
-    --chart-5: 344 88.2% 96.7%;
+    --chart-1: 345 34.1% 48.2%; /* Ruby Petals */
+    --chart-2: 345.6 44.7% 68.8%; /* Cherry Soda */
+    --chart-3: 343 44.2% 79.6%; /* Bubblegum */
+    --chart-4: 333.1 64.4% 91.2%; /* Pink Mist */
+    --chart-5: 0 0% 100%; /* White */
     --radius: 0.5rem;
   }
   .dark {
-    --background: 336 54.5% 20%;
-    --foreground: 330 33.3% 87.5%;
-    --card: 336 54.5% 25%;
-    --card-foreground: 330 33.3% 87.5%;
-    --popover: 336 54.5% 20%;
-    --popover-foreground: 330 33.3% 87.5%;
-    --primary: 327 57.1% 78%;
-    --primary-foreground: 336 54.5% 15.7%;
-    --secondary: 327 57.1% 65%;
-    --secondary-foreground: 336 54.5% 15.7%;
-    --muted: 336 54.5% 35%;
-    --muted-foreground: 330 33.3% 80%;
-    --accent: 330 33.3% 87.5%;
-    --accent-foreground: 336 54.5% 15.7%;
+    --background: 345 34.1% 48.2%; /* Ruby Petals */
+    --foreground: 0 0% 100%; /* White */
+    --card: 345.6 44.7% 68.8%; /* Cherry Soda */
+    --card-foreground: 0 0% 100%;
+    --popover: 345.6 44.7% 68.8%;
+    --popover-foreground: 0 0% 100%;
+    --primary: 343 44.2% 79.6%; /* Bubblegum */
+    --primary-foreground: 345 34.1% 48.2%; /* Ruby Petals */
+    --secondary: 345.6 44.7% 68.8%; /* Cherry Soda */
+    --secondary-foreground: 0 0% 100%;
+    --muted: 345.6 44.7% 68.8%;
+    --muted-foreground: 0 0% 100%;
+    --accent: 0 0% 100%; /* White (accent color) */
+    --accent-foreground: 345 34.1% 48.2%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
-    --border: 336 54.5% 30%;
-    --input: 336 54.5% 25%;
-    --ring: 327 57.1% 78%;
-    --chart-1: 344 28.3% 52.2%;
-    --chart-2: 327 57.1% 78%;
-    --chart-3: 344 75.6% 24.3%;
-    --chart-4: 336 54.5% 15.7%;
-    --chart-5: 330 33.3% 87.5%;
+    --border: 343 44.2% 79.6%;
+    --input: 343 44.2% 79.6%;
+    --ring: 0 0% 100%;
+    --chart-1: 0 0% 100%;
+    --chart-2: 343 44.2% 79.6%;
+    --chart-3: 345.6 44.7% 68.8%;
+    --chart-4: 333.1 64.4% 91.2%;
+    --chart-5: 345 34.1% 48.2%;
   }
 }
 
@@ -82,7 +82,11 @@
   }
   body {
     @apply text-foreground;
-    background: linear-gradient(180deg, #FFF4F9 0%, #EFCBD5 100%);
+    background: linear-gradient(
+      180deg,
+      hsl(var(--background)) 0%,
+      hsl(var(--muted)) 100%
+    );
   }
   html {
     scroll-behavior: smooth;

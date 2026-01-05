@@ -128,8 +128,8 @@ export default function LoginPage() {
           </div>
 
           {(configError || error) && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg space-y-3">
-              <p className="text-sm text-red-700">{configError || error}</p>
+            <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 rounded-lg space-y-3">
+              <p className="text-sm text-destructive">{configError || error}</p>
               {info && <p className="text-sm text-skillswap-600">{info}</p>}
               {canResend && !configError && (
                 <Button

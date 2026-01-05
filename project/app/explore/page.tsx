@@ -116,8 +116,8 @@ export default function ExplorePage() {
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-skillswap-100 to-skillswap-50 px-4">
-        <Card className="p-8 max-w-md border-red-200">
-          <p className="text-red-700 mb-4">{error}</p>
+        <Card className="p-8 max-w-md border-destructive/20 bg-destructive/10">
+          <p className="text-destructive mb-4">{error}</p>
           <Button
             onClick={() => router.refresh()}
             className="bg-skillswap-500 text-white hover:bg-skillswap-600 w-full"

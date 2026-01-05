@@ -77,14 +77,14 @@ export default function ForgotPasswordPage() {
           </div>
 
           {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-sm text-red-700">{error}</p>
+            <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+              <p className="text-sm text-destructive">{error}</p>
             </div>
           )}
 
           {success && (
-            <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
-              <p className="text-sm text-green-700">{success}</p>
+            <div className="mb-6 p-4 bg-secondary/40 border border-secondary rounded-lg">
+              <p className="text-sm text-foreground">{success}</p>
             </div>
           )}
 

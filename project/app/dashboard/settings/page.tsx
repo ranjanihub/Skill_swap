@@ -238,22 +238,6 @@ export default function SettingsPage() {
       setError('Skill name is required');
       return;
     }
-          <p className="text-red-700">{error}</p>
-          {dbSetupError && (
-            <div className="mt-4 space-y-2">
-              <p className="text-sm text-skillswap-600">{dbSetupError}</p>
-              <div className="text-sm text-skillswap-600 space-y-1">
-                <p>
-                  Check your environment variables: <span className="font-medium">NEXT_PUBLIC_SUPABASE_URL</span>{' '}
-                  and <span className="font-medium">NEXT_PUBLIC_SUPABASE_ANON_KEY</span>.
-                </p>
-                <p>
-                  After running the migration, go to Supabase Dashboard → API → “Reload” (schema cache), then refresh
-                  the app.
-                </p>
-              </div>
-            </div>
-          )}
     try {
       setSaving(true);
       setError('');
@@ -413,9 +397,33 @@ export default function SettingsPage() {
         <p className="text-skillswap-600">Update your name and bio.</p>
       </div>
 
-      {(error || success) && (
-        <Card className={error ? 'p-4 border-red-200' : 'p-4 border-green-200'}>
-          <p className={error ? 'text-red-700' : 'text-green-700'}>{error || success}</p>
+      {(error || success || dbSetupError) && (
+        <Card
+          className={
+            error || dbSetupError
+              ? 'p-4 bg-destructive/10 border-destructive/20'
+              : 'p-4 bg-secondary/40 border-secondary'
+          }
+        >
+          <p className={error || dbSetupError ? 'text-destructive' : 'text-foreground'}>
+            {error || dbSetupError || success}
+          </p>
+
+          {dbSetupError && (
+            <div className="mt-4 space-y-2">
+              <p className="text-sm text-skillswap-600">{dbSetupError}</p>
+              <div className="text-sm text-skillswap-600 space-y-1">
+                <p>
+                  Check your environment variables: <span className="font-medium">NEXT_PUBLIC_SUPABASE_URL</span>{' '}
+                  and <span className="font-medium">NEXT_PUBLIC_SUPABASE_ANON_KEY</span>.
+                </p>
+                <p>
+                  After running the migration, go to Supabase Dashboard → API → “Reload” (schema cache), then refresh
+                  the app.
+                </p>
+              </div>
+            </div>
+          )}
         </Card>
       )}
 

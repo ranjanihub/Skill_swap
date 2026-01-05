@@ -366,8 +366,8 @@ export default function DashboardPage() {
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-skillswap-100 to-skillswap-50 px-4">
-        <Card className="p-8 max-w-md border-red-200">
-          <p className="text-red-700 mb-4">{error}</p>
+        <Card className="p-8 max-w-md border-destructive/20">
+          <p className="text-destructive mb-4">{error}</p>
           <Button
             onClick={() => router.refresh()}
             className="bg-skillswap-500 text-white hover:bg-skillswap-600 w-full"
@@ -393,7 +393,7 @@ export default function DashboardPage() {
 
             <Button
               onClick={handleLogout}
-              className="bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 gap-2"
+              className="bg-accent text-accent-foreground hover:bg-secondary/50 border border-border gap-2"
               aria-label="Sign out from SkillSwap"
             >
               <LogOut className="w-4 h-4" />
@@ -722,7 +722,7 @@ export default function DashboardPage() {
                             <Button
                               onClick={() => deleteSkill(skill.id)}
                               variant="outline"
-                              className="border-red-200 text-red-600 hover:bg-red-50 gap-2"
+                              className="border-destructive/30 text-destructive hover:bg-destructive/10 gap-2"
                               disabled={saving}
                             >
                               <Trash2 className="w-4 h-4" />
@@ -1069,8 +1069,8 @@ export default function DashboardHomePage() {
 
   if (error) {
     return (
-      <Card className="p-6 border-red-200">
-        <p className="text-red-700 mb-4">{error}</p>
+      <Card className="p-6 border-destructive/20 bg-destructive/10">
+        <p className="text-destructive mb-4">{error}</p>
         <Button className="bg-skillswap-500 text-white hover:bg-skillswap-600" asChild>
           <Link href="/dashboard">Retry</Link>
         </Button>

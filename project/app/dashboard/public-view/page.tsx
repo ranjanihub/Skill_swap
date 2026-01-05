@@ -83,8 +83,8 @@ export default function PublicViewPage() {
 
   if (error) {
     return (
-      <Card className="p-6 border-red-200">
-        <p className="text-red-700">{error}</p>
+      <Card className="p-6 border-destructive/20 bg-destructive/10">
+        <p className="text-destructive">{error}</p>
       </Card>
     );
   }
