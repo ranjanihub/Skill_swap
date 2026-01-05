@@ -1,16 +1,25 @@
 import React from 'react';
 
-const ConnectionFilters = ({ onFilterChange }) => {
+interface ConnectionFiltersValue {
+    status: string;
+    skillCategory: string;
+}
+
+interface ConnectionFiltersProps {
+    onFilterChange: (filters: ConnectionFiltersValue) => void;
+}
+
+const ConnectionFilters: React.FC<ConnectionFiltersProps> = ({ onFilterChange }) => {
     const [status, setStatus] = React.useState('');
     const [skillCategory, setSkillCategory] = React.useState('');
 
-    const handleStatusChange = (event) => {
+    const handleStatusChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
         const newStatus = event.target.value;
         setStatus(newStatus);
         onFilterChange({ status: newStatus, skillCategory });
     };
 
-    const handleSkillCategoryChange = (event) => {
+    const handleSkillCategoryChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
         const newSkillCategory = event.target.value;
         setSkillCategory(newSkillCategory);
         onFilterChange({ status, skillCategory: newSkillCategory });

@@ -3,10 +3,14 @@ import { Connection } from '../../types/connections';
 import styles from '../../styles/connections.module.css';
 
 interface ConnectionDetailProps {
-    connection: Connection;
+    connection: Connection | null;
 }
 
 const ConnectionDetail: React.FC<ConnectionDetailProps> = ({ connection }) => {
+    if (!connection) {
+        return <div className={styles.emptyState}>No connection details available</div>;
+    }
+
     return (
         <div className={styles.connectionDetail}>
             <h2>{connection.name}</h2>
@@ -17,7 +21,7 @@ const ConnectionDetail: React.FC<ConnectionDetailProps> = ({ connection }) => {
             <div className={styles.skillsExchanged}>
                 <h3>Skills Exchanged</h3>
                 <ul>
-                    {connection.skillsExchanged.map(skill => (
+                    {(connection.skillsExchanged || []).map(skill => (
                         <li key={skill}>{skill}</li>
                     ))}
                 </ul>
@@ -26,7 +30,7 @@ const ConnectionDetail: React.FC<ConnectionDetailProps> = ({ connection }) => {
                 <h3>Session History</h3>
                 <ul>
                     {(connection.sessionHistory || []).map(session => (
-                        <li key={session.id}>{session.date} - {session.topic}</li>
+                        <li key={session.id ?? `${session.date}-${session.topic}`}>{session.date} - {session.topic}</li>
                     ))}
                 </ul>
             </div>
@@ -34,7 +38,7 @@ const ConnectionDetail: React.FC<ConnectionDetailProps> = ({ connection }) => {
                 <h3>Chat History</h3>
                 <ul>
                     {(connection.chatHistory || []).map(chat => (
-                        <li key={chat.id}>{chat.message} - {chat.date}</li>
+                        <li key={chat.id ?? `${chat.date}-${chat.message}`}>{chat.message} - {chat.date}</li>
                     ))}
                 </ul>
             </div>

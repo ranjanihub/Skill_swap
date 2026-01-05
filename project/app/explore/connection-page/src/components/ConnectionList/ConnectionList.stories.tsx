@@ -1,5 +1,5 @@
 import React from 'react';
-import { ConnectionList } from './ConnectionList';
+import ConnectionList from './ConnectionList';
 
 export default {
   title: 'Components/ConnectionList',
@@ -23,14 +23,14 @@ const connections = [
   },
 ];
 
-const Template = (args) => <ConnectionList {...args} />;
+const Template = (args: React.ComponentProps<typeof ConnectionList>) => <ConnectionList {...args} />;
 
-export const Default = Template.bind({});
+export const Default: any = Template.bind({});
 Default.args = {
   connections: connections,
 };
 
-export const EmptyState = Template.bind({});
+export const EmptyState: any = Template.bind({});
 EmptyState.args = {
   connections: [],
 };
