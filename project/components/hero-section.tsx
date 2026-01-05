@@ -40,8 +40,9 @@ export default function HeroSection() {
         </h1>
 
         <p className="mt-6 text-sm sm:text-base text-skillswap-dark max-w-2xl mx-auto leading-relaxed">
-          Connect with learners worldwide to trade knowledge and master new skills. From coding to
-          cooking, teaching to design—your expertise is valuable, and someone wants to learn it.
+          Teach what you know. Learn what you need. SkillSwap matches people with complementary
+          skills for short, practical sessions. Chat in-app, then meet on your preferred call
+          platform by sharing a link in chat.
         </p>
 
         <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">

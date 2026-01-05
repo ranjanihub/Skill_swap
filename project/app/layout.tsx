@@ -8,7 +8,7 @@ const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
   title: 'SkillSwap - Exchange Skills, Unlock Potential',
-  description: 'Peer-to-peer microlearning platform for skill exchange',
+  description: 'Peer-to-peer microlearning for skill exchange through short sessions, in-app chat, and optional external calls',
 };
 
 export default function RootLayout({

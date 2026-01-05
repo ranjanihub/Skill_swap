@@ -40,12 +40,13 @@ export default function WeekGrid({ sessions, onSelect }: Props) {
         <div className="text-sm text-skillswap-600">Mon — Sun</div>
       </div>
 
-      <div className="grid grid-cols-7 gap-3">
-        {days.map((d, idx) => (
-          <div key={d.toDateString()} className="bg-white rounded-lg p-3 min-h-[140px]">
+      <div className="overflow-x-auto">
+        <div className="grid grid-cols-7 gap-3 min-w-[980px]">
+          {days.map((d, idx) => (
+            <div key={d.toDateString()} className="bg-white rounded-lg p-3 min-h-[140px]">
             <div className="flex items-center justify-between mb-2">
-              <div className="text-sm font-medium">{dayLabel(d)}</div>
-              <div className="text-xs text-skillswap-600">{sessionsByDay[idx].length} events</div>
+              <div className="text-sm font-medium whitespace-nowrap">{dayLabel(d)}</div>
+              <div className="text-xs text-skillswap-600 whitespace-nowrap">{sessionsByDay[idx].length} events</div>
             </div>
 
             <div className="space-y-2">
@@ -66,8 +67,9 @@ export default function WeekGrid({ sessions, onSelect }: Props) {
                 ))
               )}
             </div>
-          </div>
-        ))}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

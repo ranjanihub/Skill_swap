@@ -2,12 +2,38 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/context/auth-context';
-import { isSupabaseConfigured, supabase, Conversation, Message, UserProfile } from '@/lib/supabase';
+import {
+  isSupabaseConfigured,
+  supabase,
+  supabaseConfigError,
+  Conversation,
+  Message,
+  Skill,
+  SkillSwapSession,
+  UserProfile,
+} from '@/lib/supabase';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useRouter } from 'next/navigation';
 
 type ConvWithMeta = Conversation & {
@@ -33,6 +59,25 @@ function IconCalendar(props: { className?: string }) {
   );
 }
 
+function IconCall(props: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={props.className} xmlns="http://www.w3.org/2000/svg">
+      <path
+        d="M8.5 6.5h7A2.5 2.5 0 0 1 18 9v6a2.5 2.5 0 0 1-2.5 2.5h-7A2.5 2.5 0 0 1 6 15V9a2.5 2.5 0 0 1 2.5-2.5Z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+      <path
+        d="M18 10.2l2.2-1.3a1 1 0 0 1 1.5.86v4.5a1 1 0 0 1-1.5.86L18 13.8"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export default function MessagesPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
@@ -42,6 +87,24 @@ export default function MessagesPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(true);
+
+  // Schedule/reschedule from chat
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [savingSchedule, setSavingSchedule] = useState(false);
+  const [existingNextSession, setExistingNextSession] = useState<SkillSwapSession | null>(null);
+  const [myTeachSkills, setMyTeachSkills] = useState<Skill[]>([]);
+  const [partnerTeachSkills, setPartnerTeachSkills] = useState<Skill[]>([]);
+
+  const [mySkillId, setMySkillId] = useState('');
+  const [partnerSkillId, setPartnerSkillId] = useState('');
+  const [scheduledAtLocal, setScheduledAtLocal] = useState('');
+  const [durationMinutes, setDurationMinutes] = useState<number>(60);
+  const [notes, setNotes] = useState('');
+
+  // External call link sharing (Google Meet)
+  const [callOpen, setCallOpen] = useState(false);
+  const [callLink, setCallLink] = useState('');
+  const [sendingCallLink, setSendingCallLink] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -117,6 +180,147 @@ export default function MessagesPage() {
     };
   }, [activeConv, user]);
 
+  const otherUserId = useMemo(() => {
+    if (!activeConv || !user) return null;
+    return activeConv.participant_a === user.id ? activeConv.participant_b : activeConv.participant_a;
+  }, [activeConv, user]);
+
+  useEffect(() => {
+    if (!scheduleOpen) return;
+    if (!user || !otherUserId) return;
+    if (!isSupabaseConfigured) return;
+
+    const run = async () => {
+      try {
+        setExistingNextSession(null);
+
+        const { data: mySkills, error: mySkillsErr } = await supabase
+          .from('skills')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('skill_type', 'teach')
+          .order('created_at', { ascending: false })
+          .limit(200);
+        if (mySkillsErr) throw mySkillsErr;
+        setMyTeachSkills((mySkills || []) as Skill[]);
+
+        const { data: partnerSkills, error: partnerSkillsErr } = await supabase
+          .from('skills')
+          .select('*')
+          .eq('user_id', otherUserId)
+          .eq('skill_type', 'teach')
+          .order('created_at', { ascending: false })
+          .limit(200);
+        if (partnerSkillsErr) throw partnerSkillsErr;
+        setPartnerTeachSkills((partnerSkills || []) as Skill[]);
+
+        const nowIso = new Date().toISOString();
+        const { data: nextData, error: nextErr } = await supabase
+          .from('skill_swap_sessions')
+          .select('*')
+          .or(
+            `and(user_a_id.eq.${user.id},user_b_id.eq.${otherUserId}),and(user_a_id.eq.${otherUserId},user_b_id.eq.${user.id})`
+          )
+          .eq('status', 'scheduled')
+          .gte('scheduled_at', nowIso)
+          .order('scheduled_at', { ascending: true })
+          .limit(1);
+
+        if (nextErr) throw nextErr;
+        const next = ((nextData || [])[0] as SkillSwapSession | undefined) ?? null;
+        setExistingNextSession(next);
+
+        if (next?.scheduled_at) {
+          setScheduledAtLocal(new Date(next.scheduled_at).toISOString().slice(0, 16));
+        } else {
+          setScheduledAtLocal('');
+        }
+        setDurationMinutes(next?.duration_minutes ?? 60);
+        setNotes(next?.notes ?? '');
+
+        if (next) {
+          const iAmA = next.user_a_id === user.id;
+          setMySkillId(iAmA ? next.skill_a_id : next.skill_b_id);
+          setPartnerSkillId(iAmA ? next.skill_b_id : next.skill_a_id);
+        } else {
+          setMySkillId('');
+          setPartnerSkillId('');
+        }
+      } catch (err) {
+        console.error('Failed to load scheduling data', err);
+      }
+    };
+
+    void run();
+  }, [scheduleOpen, user, otherUserId]);
+
+  const resetScheduleForm = () => {
+    setExistingNextSession(null);
+    setMyTeachSkills([]);
+    setPartnerTeachSkills([]);
+    setMySkillId('');
+    setPartnerSkillId('');
+    setScheduledAtLocal('');
+    setDurationMinutes(60);
+    setNotes('');
+  };
+
+  const saveSchedule = async () => {
+    if (!user || !otherUserId) return;
+    if (!isSupabaseConfigured) {
+      alert(supabaseConfigError ?? 'Supabase is not configured');
+      return;
+    }
+
+    if (!mySkillId || !partnerSkillId || !scheduledAtLocal) {
+      alert('Please select both skills and a date/time.');
+      return;
+    }
+
+    const scheduledAtIso = new Date(scheduledAtLocal).toISOString();
+
+    setSavingSchedule(true);
+    try {
+      if (existingNextSession) {
+        const iAmA = existingNextSession.user_a_id === user.id;
+        const patch = {
+          scheduled_at: scheduledAtIso,
+          duration_minutes: durationMinutes || 60,
+          notes: notes.trim() ? notes.trim() : null,
+          ...(iAmA
+            ? { skill_a_id: mySkillId, skill_b_id: partnerSkillId }
+            : { skill_a_id: partnerSkillId, skill_b_id: mySkillId }),
+        };
+
+        const { error } = await supabase
+          .from('skill_swap_sessions')
+          .update(patch)
+          .eq('id', existingNextSession.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('skill_swap_sessions').insert({
+          user_a_id: user.id,
+          user_b_id: otherUserId,
+          skill_a_id: mySkillId,
+          skill_b_id: partnerSkillId,
+          status: 'scheduled',
+          scheduled_at: scheduledAtIso,
+          duration_minutes: durationMinutes || 60,
+          notes: notes.trim() ? notes.trim() : null,
+        });
+        if (error) throw error;
+      }
+
+      setScheduleOpen(false);
+      resetScheduleForm();
+    } catch (err) {
+      console.error('Failed to save schedule', err);
+      alert('Failed to save session. Make sure both users have teaching skills and migrations are applied.');
+    } finally {
+      setSavingSchedule(false);
+    }
+  };
+
   const sendMessage = async () => {
     if (!activeConv || !user || !text.trim()) return;
     try {
@@ -131,6 +335,48 @@ export default function MessagesPage() {
       setTimeout(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' }), 50);
     } catch (err) {
       console.error('Failed to send message', err);
+    }
+  };
+
+  const openGoogleMeet = () => {
+    // Uses meet.new which redirects to a new meeting for signed-in Google accounts.
+    window.open('https://meet.new', '_blank', 'noopener,noreferrer');
+  };
+
+  const shareCallLink = async () => {
+    if (!activeConv || !user) return;
+    if (!isSupabaseConfigured) {
+      alert(supabaseConfigError ?? 'Supabase is not configured');
+      return;
+    }
+    const link = callLink.trim();
+    if (!link) {
+      alert('Paste a call link first.');
+      return;
+    }
+    if (!/^https?:\/\//i.test(link)) {
+      alert('Please use a full URL (starting with http:// or https://).');
+      return;
+    }
+
+    setSendingCallLink(true);
+    try {
+      const body = `Call link: ${link}`;
+      const { error, data } = await supabase
+        .from('messages')
+        .insert({ conversation_id: activeConv.id, sender_id: user.id, body })
+        .select()
+        .single();
+      if (error) throw error;
+      setMessages((m) => [...m, data]);
+      setCallLink('');
+      setCallOpen(false);
+      setTimeout(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' }), 50);
+    } catch (err) {
+      console.error('Failed to share call link', err);
+      alert('Failed to share call link.');
+    } finally {
+      setSendingCallLink(false);
     }
   };
 
@@ -225,8 +471,27 @@ export default function MessagesPage() {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <button className="p-2 rounded hover:bg-skillswap-50" title="View profile"><IconProfile className="w-5 h-5 text-skillswap-600" /></button>
-                    <button className="p-2 rounded hover:bg-skillswap-50" title="Session details"><IconCalendar className="w-5 h-5 text-skillswap-600" /></button>
+                    <button
+                      className="p-2 rounded hover:bg-skillswap-50"
+                      title="View profile"
+                      onClick={() => router.push('/dashboard/public-view')}
+                    >
+                      <IconProfile className="w-5 h-5 text-skillswap-600" />
+                    </button>
+                    <button
+                      className="p-2 rounded hover:bg-skillswap-50"
+                      title="Start a call (Google Meet)"
+                      onClick={() => setCallOpen(true)}
+                    >
+                      <IconCall className="w-5 h-5 text-skillswap-600" />
+                    </button>
+                    <button
+                      className="p-2 rounded hover:bg-skillswap-50"
+                      title="Schedule session"
+                      onClick={() => setScheduleOpen(true)}
+                    >
+                      <IconCalendar className="w-5 h-5 text-skillswap-600" />
+                    </button>
                   </div>
                 </div>
 
@@ -265,6 +530,161 @@ export default function MessagesPage() {
           </main>
         </div>
       </div>
+
+      <Dialog
+        open={scheduleOpen}
+        onOpenChange={(open) => {
+          setScheduleOpen(open);
+          if (!open) resetScheduleForm();
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{existingNextSession ? 'Reschedule session' : 'Schedule session'}</DialogTitle>
+            <DialogDescription>
+              {existingNextSession
+                ? 'Update your next scheduled session with this person.'
+                : 'Pick skills and set a time for your session.'}
+            </DialogDescription>
+          </DialogHeader>
+
+          {!isSupabaseConfigured ? (
+            <Card className="p-4 bg-white border border-skillswap-100">
+              <p className="font-semibold text-skillswap-dark">Supabase not configured</p>
+              <p className="text-sm text-skillswap-600 mt-1">{supabaseConfigError}</p>
+            </Card>
+          ) : null}
+
+          {isSupabaseConfigured && (myTeachSkills.length === 0 || partnerTeachSkills.length === 0) ? (
+            <Card className="p-4 bg-white border border-skillswap-100">
+              <p className="font-semibold text-skillswap-dark">Skills required</p>
+              <p className="text-sm text-skillswap-600 mt-1">
+                Both you and your partner need at least one teaching skill to schedule a session.
+              </p>
+              <div className="mt-3 flex gap-2">
+                <Button onClick={() => router.push('/dashboard#skills')} className="bg-skillswap-500 text-white">
+                  Add your skills
+                </Button>
+                <Button variant="outline" onClick={() => setScheduleOpen(false)}>
+                  Close
+                </Button>
+              </div>
+            </Card>
+          ) : null}
+
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <Label>You will teach</Label>
+                <Select value={mySkillId} onValueChange={setMySkillId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select your teaching skill" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {myTeachSkills.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Partner will teach</Label>
+                <Select value={partnerSkillId} onValueChange={setPartnerSkillId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select partner skill" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {partnerTeachSkills.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <Label>Date & time</Label>
+                <Input type="datetime-local" value={scheduledAtLocal} onChange={(e) => setScheduledAtLocal(e.target.value)} />
+              </div>
+              <div>
+                <Label>Duration (minutes)</Label>
+                <Input
+                  type="number"
+                  min={15}
+                  max={240}
+                  step={15}
+                  value={Number.isFinite(durationMinutes) ? String(durationMinutes) : '60'}
+                  onChange={(e) => setDurationMinutes(Number(e.target.value))}
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label>Notes (optional)</Label>
+              <Textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Agenda, tasks, resources, or an external call link"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setScheduleOpen(false)} disabled={savingSchedule}>
+              Cancel
+            </Button>
+            <Button className="bg-skillswap-500 text-white" onClick={saveSchedule} disabled={savingSchedule || !isSupabaseConfigured}>
+              {savingSchedule ? 'Saving…' : existingNextSession ? 'Update' : 'Schedule'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={callOpen}
+        onOpenChange={(open) => {
+          setCallOpen(open);
+          if (!open) setCallLink('');
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Connect via Google Meet</DialogTitle>
+            <DialogDescription>
+              Start a Meet in a new tab, then paste the link here to share it in chat.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <Button onClick={openGoogleMeet} className="bg-skillswap-500 text-white">
+              Open meet.new
+            </Button>
+
+            <div>
+              <Label>Meet link</Label>
+              <Input
+                value={callLink}
+                onChange={(e) => setCallLink(e.target.value)}
+                placeholder="https://meet.google.com/xxx-xxxx-xxx"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCallOpen(false)} disabled={sendingCallLink}>
+              Close
+            </Button>
+            <Button className="bg-skillswap-500 text-white" onClick={shareCallLink} disabled={sendingCallLink || !isSupabaseConfigured}>
+              {sendingCallLink ? 'Sending…' : 'Share link'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

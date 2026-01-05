@@ -8,19 +8,19 @@ export default function HowItWorks() {
       id: 1,
       title: 'Create Your Profile',
       description:
-        'Sign up and build your profile by highlighting your unique skills and interests. Tell the community what you excel at and what you want to learn.',
+        'Sign up and list what you can teach and what you want to learn. You can be a learner and a mentor at the same time.',
     },
     {
       id: 2,
-      title: 'List Skills to Teach & Learn',
+      title: 'Get Matched',
       description:
-        'Add the skills you\'d like to share with others and the ones you\'re eager to master. Connect with peers who share your learning goals.',
+        'Find people with complementary skills, goals, and availability. Connect with the right partner for a two-way swap.',
     },
     {
       id: 3,
-      title: 'Swap Sessions Seamlessly',
+      title: 'Book & Swap Sessions',
       description:
-        'Schedule sessions with your matched peers, exchange knowledge in real-time, and grow together. Track progress and build lasting connections.',
+        'Schedule focused 15–60 minute sessions, chat in-app, and share an external call link if you want to meet live. Leave feedback to build trust.',
     },
   ];
 

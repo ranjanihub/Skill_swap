@@ -8,9 +8,13 @@ import { Badge } from '@/components/ui/badge';
 type Props = {
   session: SkillSwapSession | null;
   onClose?: () => void;
+  onJoin?: (s: SkillSwapSession) => void;
+  onReschedule?: (s: SkillSwapSession) => void;
+  onCancel?: (s: SkillSwapSession) => void;
+  onMarkCompleted?: (s: SkillSwapSession) => void;
 };
 
-export default function EventDetailDrawer({ session, onClose }: Props) {
+export default function EventDetailDrawer({ session, onClose, onJoin, onReschedule, onCancel, onMarkCompleted }: Props) {
   if (!session) {
     return (
       <Card className="p-6">
@@ -19,6 +23,9 @@ export default function EventDetailDrawer({ session, onClose }: Props) {
       </Card>
     );
   }
+
+  const scheduledLabel = session.scheduled_at ? new Date(session.scheduled_at).toLocaleString() : 'TBD';
+  const showMarkCompleted = session.status === 'scheduled' || session.status === 'ongoing';
 
   return (
     <Card className="p-4 space-y-4">
@@ -29,21 +36,32 @@ export default function EventDetailDrawer({ session, onClose }: Props) {
         </Avatar>
         <div>
           <p className="font-medium">Skill session</p>
-          <p className="text-xs text-skillswap-600">{new Date(session.scheduled_at || '').toLocaleString()}</p>
+          <p className="text-xs text-skillswap-600">{scheduledLabel}</p>
         </div>
       </div>
 
       <div>
         <h4 className="font-medium">Details</h4>
-        <p className="text-sm text-skillswap-600 mt-1">Type: {session.status}</p>
+        <p className="text-sm text-skillswap-600 mt-1">Status: {session.status}</p>
         <p className="text-sm text-skillswap-600 mt-1">Duration: {session.duration_minutes ?? 60} minutes</p>
-        <p className="text-sm text-skillswap-600 mt-1">Mode: {session.notes ? 'Video' : 'Chat'}</p>
+        <p className="text-sm text-skillswap-600 mt-1">Mode: Chat (optional external call link)</p>
       </div>
 
-      <div className="flex gap-2">
-        <Button className="bg-skillswap-500 text-white">Join Session</Button>
-        <Button variant="outline">Reschedule</Button>
-        <Button variant="destructive">Cancel</Button>
+      <div className="flex gap-2 flex-wrap">
+        <Button className="bg-skillswap-500 text-white" onClick={() => onJoin?.(session)}>
+          Join Session
+        </Button>
+        <Button variant="outline" onClick={() => onReschedule?.(session)}>
+          Reschedule
+        </Button>
+        {showMarkCompleted ? (
+          <Button variant="outline" onClick={() => onMarkCompleted?.(session)}>
+            Mark completed
+          </Button>
+        ) : null}
+        <Button variant="destructive" onClick={() => onCancel?.(session)}>
+          Cancel
+        </Button>
       </div>
 
       <div>

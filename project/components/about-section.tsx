@@ -19,7 +19,7 @@ export default function AboutSection() {
             <p className="text-base sm:text-lg leading-relaxed">
               <span className="font-bold">SkillSwap</span> is a peer-to-peer learning platform built
               on the belief that everyone has something valuable to teach — and something new to
-              learn.
+              learn. A user can be both a learner and a mentor at the same time.
             </p>
 
             <p className="mt-6 text-base sm:text-lg leading-relaxed">
@@ -38,9 +38,9 @@ export default function AboutSection() {
                 Our Vision
               </h3>
               <ul className="list-disc pl-6 space-y-2 text-skillswap-dark">
-                <li>We envision a world where learning is not limited by cost, background, or formal titles.</li>
-                <li>A world where people grow by helping each other grow.</li>
-                <li>SkillSwap exists to make learning more human, accessible, and meaningful.</li>
+                <li>A learning economy powered by collaboration, where skills matter more than certificates.</li>
+                <li>A community where everyone has something valuable to teach—and something new to learn.</li>
+                <li>Learning that is accessible, social, practical, and built on real human interaction.</li>
               </ul>
             </div>
           </Card>
@@ -51,8 +51,8 @@ export default function AboutSection() {
                 Our Mission
               </h3>
               <p className="text-skillswap-dark leading-relaxed">
-                To create a global learning community where skills are exchanged freely, growth is
-                collaborative, and everyone has the opportunity to learn, teach, and connect.
+                To build a trusted peer-to-peer community where people exchange skills through
+                short sessions, smart matching, and feedback-driven reputation.
               </p>
               <p className="mt-4 text-skillswap-dark font-semibold text-center">
                 “When we share what we know, we grow together.”

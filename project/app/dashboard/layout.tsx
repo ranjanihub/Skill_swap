@@ -6,7 +6,6 @@ import {
   CalendarDays,
   Home,
   LogOut,
-  Menu,
   MessageSquare,
   Settings,
   Users,
@@ -16,13 +15,13 @@ import {
 
 import { ProtectedRoute } from '@/components/protected-route';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/auth-context';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
+import AppShell from '@/components/app-shell';
 
 const nav = [
   { href: '/dashboard', label: 'Home', icon: Home },
@@ -71,10 +70,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         (payload) => {
           try {
             const newNotif = payload.new as any;
+            const type = (newNotif?.type as string | undefined) || '';
+
+            if (type === 'skill_match') {
+              const actor = newNotif.payload?.actor_name || 'Someone';
+              const skillName = newNotif.payload?.skill_name || 'a skill';
+              const skillType = newNotif.payload?.skill_type;
+              const verb = skillType === 'teach' ? 'can teach' : 'wants to learn';
+              toast({
+                title: 'Skill match found',
+                description: `${actor} ${verb} ${skillName}.`,
+              });
+              return;
+            }
+
+            // default / legacy behavior
             const requester = newNotif.payload?.requester_name || 'Someone';
             toast({
-              title: 'New connection request',
-              description: `${requester} sent you a connection request.`,
+              title: 'New notification',
+              description: `${requester} sent you an update.`,
             });
           } catch (e) {
             console.error('Notification handler error', e);
@@ -94,112 +108,55 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-background">
-        <aside className="fixed inset-y-0 left-0 w-[76px] bg-white border-r border-skillswap-200 flex flex-col items-center py-4">
+      <AppShell
+        nav={nav}
+        bottomNav={bottomNav}
+        bottomActions={
           <Button
             type="button"
             variant="ghost"
             size="icon"
+            onClick={handleSignOut}
             className="text-skillswap-600 hover:bg-skillswap-50"
-            aria-label="Menu"
+            aria-label="Sign out"
+            title="Sign out"
           >
-            <Menu className="h-5 w-5" />
+            <LogOut className="h-5 w-5" />
           </Button>
-
-          <nav className="mt-6 flex flex-col gap-2 w-full px-2">
-            {nav.map((item) => {
-              const isActive = pathname === item.href;
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    'relative flex items-center justify-center h-11 rounded-xl text-skillswap-600 hover:bg-skillswap-50 transition-colors',
-                    isActive && 'bg-skillswap-100 text-skillswap-500'
-                  )}
-                  aria-label={item.label}
-                  title={item.label}
-                >
-                  {isActive && (
-                    <span className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-skillswap-500" />
-                  )}
-                  <Icon className="h-5 w-5" />
-                </Link>
-              );
-            })}
-          </nav>
-
-          <div className="mt-auto pt-4 w-full px-2 flex flex-col gap-2">
-            {bottomNav.map((item) => {
-              const isActive = pathname === item.href;
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    'relative flex items-center justify-center h-11 rounded-xl text-skillswap-600 hover:bg-skillswap-50 transition-colors',
-                    isActive && 'bg-skillswap-100 text-skillswap-500'
-                  )}
-                  aria-label={item.label}
-                  title={item.label}
-                >
-                  {isActive && (
-                    <span className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-skillswap-500" />
-                  )}
-                  <Icon className="h-5 w-5" />
-                </Link>
-              );
-            })}
+        }
+        headerLeft={
+          <>
+            <p className="text-sm sm:text-base font-semibold text-skillswap-dark truncate">
+              Good morning, {displayName}
+            </p>
+            <p className="text-xs text-skillswap-600 truncate">Welcome back to SkillSwap</p>
+          </>
+        }
+        headerRight={
+          <>
+            <ThemeToggle />
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              onClick={handleSignOut}
               className="text-skillswap-600 hover:bg-skillswap-50"
-              aria-label="Sign out"
-              title="Sign out"
+              aria-label="Notifications"
             >
-              <LogOut className="h-5 w-5" />
+              <Bell className="h-5 w-5" />
             </Button>
-          </div>
-        </aside>
 
-        <div className="min-h-screen pl-[76px] flex flex-col min-w-0">
-          <header className="h-16 bg-white border-b border-skillswap-200 flex items-center justify-between px-4 sm:px-6">
-            <div className="min-w-0">
-              <p className="text-sm sm:text-base font-semibold text-skillswap-dark truncate">
-                Good morning, {displayName}
-              </p>
-              <p className="text-xs text-skillswap-600 truncate">Welcome back to SkillSwap</p>
-            </div>
-
-            <div className="flex items-center gap-1 sm:gap-2">
-              <ThemeToggle />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="text-skillswap-600 hover:bg-skillswap-50"
-                aria-label="Notifications"
-              >
-                <Bell className="h-5 w-5" />
-              </Button>
-
-              <Avatar className="h-9 w-9">
-                <AvatarImage
-                  src={(user?.user_metadata?.avatar_url as string | undefined) || ''}
-                  alt={displayName}
-                />
-                <AvatarFallback>{initials(displayName)}</AvatarFallback>
-              </Avatar>
-            </div>
-          </header>
-
-          <main className="flex-1 p-4 sm:p-6">{children}</main>
-        </div>
-      </div>
+            <Avatar className="h-9 w-9">
+              <AvatarImage
+                src={(user?.user_metadata?.avatar_url as string | undefined) || ''}
+                alt={displayName}
+              />
+              <AvatarFallback>{initials(displayName)}</AvatarFallback>
+            </Avatar>
+          </>
+        }
+      >
+        {children}
+      </AppShell>
     </ProtectedRoute>
   );
 }
