@@ -11,7 +11,7 @@ const ConnectionDetail: React.FC<ConnectionDetailProps> = ({ connection }) => {
         <div className={styles.connectionDetail}>
             <h2>{connection.name}</h2>
             <div className={styles.profilePreview}>
-                <img src={connection.profilePhoto} alt={`${connection.name}'s profile`} />
+                <img src={connection.profilePhotoUrl} alt={`${connection.name}'s profile`} />
                 <p>Status: {connection.status}</p>
             </div>
             <div className={styles.skillsExchanged}>
