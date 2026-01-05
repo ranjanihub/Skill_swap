@@ -6,15 +6,15 @@ describe('ConnectionDetail', () => {
     const mockConnection = {
         id: '1',
         name: 'John Doe',
-        profilePhoto: 'http://example.com/photo.jpg',
+        profilePhotoUrl: 'http://example.com/photo.jpg',
         skillsExchanged: ['JavaScript', 'React'],
         sessionHistory: [
-            { date: '2023-01-01', topic: 'Intro to React' },
-            { date: '2023-01-15', topic: 'Advanced JavaScript' },
+            { id: 's1', date: '2023-01-01', topic: 'Intro to React' },
+            { id: 's2', date: '2023-01-15', topic: 'Advanced JavaScript' },
         ],
         chatHistory: [
-            { date: '2023-01-02', message: 'Looking forward to our session!' },
-            { date: '2023-01-10', message: 'Can we reschedule?' },
+            { id: 'c1', date: '2023-01-02', message: 'Looking forward to our session!' },
+            { id: 'c2', date: '2023-01-10', message: 'Can we reschedule?' },
         ],
     };
 
@@ -22,7 +22,7 @@ describe('ConnectionDetail', () => {
         render(<ConnectionDetail connection={mockConnection} />);
 
         expect(screen.getByText(mockConnection.name)).toBeInTheDocument();
-        expect(screen.getByAltText('Profile photo')).toHaveAttribute('src', mockConnection.profilePhoto);
+        expect(screen.getByAltText("John Doe's profile")).toHaveAttribute('src', mockConnection.profilePhotoUrl);
         expect(screen.getByText('Skills Exchanged:')).toBeInTheDocument();
         expect(screen.getByText(mockConnection.skillsExchanged[0])).toBeInTheDocument();
         expect(screen.getByText(mockConnection.skillsExchanged[1])).toBeInTheDocument();

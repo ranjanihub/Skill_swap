@@ -6,7 +6,7 @@ describe('ConnectionItem', () => {
   const mockConnection = {
     id: '1',
     name: 'John Doe',
-    profilePhoto: 'http://example.com/photo.jpg',
+    profilePhotoUrl: 'http://example.com/photo.jpg',
     connectionType: 'Friend',
     status: 'Active',
   };
@@ -17,7 +17,7 @@ describe('ConnectionItem', () => {
     expect(screen.getByText(mockConnection.name)).toBeInTheDocument();
     expect(screen.getByText(mockConnection.connectionType)).toBeInTheDocument();
     expect(screen.getByText(mockConnection.status)).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: /profile photo/i })).toHaveAttribute('src', mockConnection.profilePhoto);
+    expect(screen.getByRole('img', { name: /john doe's profile/i })).toHaveAttribute('src', mockConnection.profilePhotoUrl);
   });
 
   test('renders quick action buttons', () => {

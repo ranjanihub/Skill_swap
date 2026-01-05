@@ -10,14 +10,14 @@ const connections = [
   {
     id: '1',
     name: 'John Doe',
-    profilePhoto: 'https://via.placeholder.com/150',
+    profilePhotoUrl: 'https://via.placeholder.com/150',
     connectionType: 'Friend',
     status: 'Active',
   },
   {
     id: '2',
     name: 'Jane Smith',
-    profilePhoto: 'https://via.placeholder.com/150',
+    profilePhotoUrl: 'https://via.placeholder.com/150',
     connectionType: 'Colleague',
     status: 'Pending',
   },

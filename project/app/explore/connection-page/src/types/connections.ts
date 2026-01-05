@@ -1,18 +1,20 @@
 export interface Connection {
     id: string;
     name: string;
-    profilePhotoUrl: string;
-    connectionType: 'pending' | 'active';
-    status: 'requested' | 'accepted' | 'declined' | 'blocked';
-    skillsExchanged: string[];
-    lastActive: Date;
+    profilePhotoUrl?: string;
+    profilePhoto?: string;
+    connectionType?: string;
+    type?: string;
+    status?: string;
+    skillsExchanged?: string[];
+    lastActive?: Date;
     sessionHistory?: {
-        id: string;
+        id?: string;
         date: string;
         topic: string;
     }[];
     chatHistory?: {
-        id: string;
+        id?: string;
         date: string;
         message: string;
     }[];

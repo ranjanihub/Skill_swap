@@ -1,5 +1,5 @@
 import React from 'react';
-import { ConnectionItem } from '../ConnectionItem/ConnectionItem';
+import ConnectionItem from '../ConnectionItem/ConnectionItem';
 import { Connection } from '../../types/connections';
 import styles from '../../styles/connections.module.css';
 

@@ -7,14 +7,14 @@ describe('ConnectionList', () => {
     {
       id: '1',
       name: 'John Doe',
-      profilePhoto: 'john_doe.jpg',
+      profilePhotoUrl: 'john_doe.jpg',
       connectionType: 'Mentor',
       status: 'Active',
     },
     {
       id: '2',
       name: 'Jane Smith',
-      profilePhoto: 'jane_smith.jpg',
+      profilePhotoUrl: 'jane_smith.jpg',
       connectionType: 'Mentee',
       status: 'Pending',
     },
