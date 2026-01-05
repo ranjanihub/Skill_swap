@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Avatar } from '@/components/ui/avatar';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { useRouter } from 'next/navigation';
 
 type ConvWithMeta = Conversation & {
@@ -183,7 +183,10 @@ export default function MessagesPage() {
                   const unread = !!last && last.sender_id !== user?.id;
                   return (
                     <div key={c.id} onClick={() => setActiveConv(c)} className={`cursor-pointer p-3 rounded-lg flex items-center gap-3 ${activeConv?.id === c.id ? 'bg-white shadow-sm border border-skillswap-100' : 'bg-white/60 hover:bg-white'}`}>
-                      <Avatar src={undefined} alt={c.other?.full_name ?? 'Member'} />
+                      <Avatar>
+                        <AvatarImage src={undefined as any} alt={c.other?.full_name ?? 'Member'} />
+                        <AvatarFallback>{(c.other?.full_name || 'M').slice(0, 1)}</AvatarFallback>
+                      </Avatar>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between">
                           <div className="min-w-0">
@@ -207,8 +210,11 @@ export default function MessagesPage() {
             {activeConv ? (
               <Card className="flex-1 flex flex-col overflow-hidden">
                 <div className="flex items-center justify-between p-4 border-b border-skillswap-100">
-                  <div className="flex items-center gap-3">
-                    <Avatar src={undefined} alt={activeConv.other?.full_name ?? 'Member'} />
+                    <div className="flex items-center gap-3">
+                    <Avatar>
+                      <AvatarImage src={undefined as any} alt={activeConv.other?.full_name ?? 'Member'} />
+                      <AvatarFallback>{(activeConv.other?.full_name || 'M').slice(0, 1)}</AvatarFallback>
+                    </Avatar>
                     <div>
                       <p className="font-medium">{activeConv.other?.full_name ?? 'Member'}</p>
                       <div className="flex items-center gap-2">

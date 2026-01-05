@@ -2,7 +2,7 @@ import React from 'react';
 import { SkillSwapSession } from '@/lib/supabase';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Avatar } from '@/components/ui/avatar';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 
 type Props = {
@@ -23,7 +23,10 @@ export default function EventDetailDrawer({ session, onClose }: Props) {
   return (
     <Card className="p-4 space-y-4">
       <div className="flex items-center gap-3">
-        <Avatar src={undefined} alt="Partner" />
+        <Avatar>
+          <AvatarImage src={undefined as any} alt="Partner" />
+          <AvatarFallback>P</AvatarFallback>
+        </Avatar>
         <div>
           <p className="font-medium">Skill session</p>
           <p className="text-xs text-skillswap-600">{new Date(session.scheduled_at || '').toLocaleString()}</p>
