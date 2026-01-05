@@ -25,7 +25,7 @@ const ConnectionDetail: React.FC<ConnectionDetailProps> = ({ connection }) => {
             <div className={styles.sessionHistory}>
                 <h3>Session History</h3>
                 <ul>
-                    {connection.sessionHistory.map(session => (
+                    {(connection.sessionHistory || []).map(session => (
                         <li key={session.id}>{session.date} - {session.topic}</li>
                     ))}
                 </ul>
@@ -33,7 +33,7 @@ const ConnectionDetail: React.FC<ConnectionDetailProps> = ({ connection }) => {
             <div className={styles.chatHistory}>
                 <h3>Chat History</h3>
                 <ul>
-                    {connection.chatHistory.map(chat => (
+                    {(connection.chatHistory || []).map(chat => (
                         <li key={chat.id}>{chat.message} - {chat.date}</li>
                     ))}
                 </ul>

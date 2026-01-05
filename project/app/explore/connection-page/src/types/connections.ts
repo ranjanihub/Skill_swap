@@ -6,6 +6,16 @@ export interface Connection {
     status: 'requested' | 'accepted' | 'declined' | 'blocked';
     skillsExchanged: string[];
     lastActive: Date;
+    sessionHistory?: {
+        id: string;
+        date: string;
+        topic: string;
+    }[];
+    chatHistory?: {
+        id: string;
+        date: string;
+        message: string;
+    }[];
 }
 
 export interface ConnectionListProps {
