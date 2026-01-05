@@ -20,6 +20,9 @@ import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/auth-context';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
+import { useToast } from '@/hooks/use-toast';
 
 const nav = [
   { href: '/dashboard', label: 'Home', icon: Home },
@@ -54,6 +57,40 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     await signOut();
     router.replace('/login');
   };
+
+  const { toast } = useToast();
+
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel(`notifications:${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
+        (payload) => {
+          try {
+            const newNotif = payload.new as any;
+            const requester = newNotif.payload?.requester_name || 'Someone';
+            toast({
+              title: 'New connection request',
+              description: `${requester} sent you a connection request.`,
+            });
+          } catch (e) {
+            console.error('Notification handler error', e);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      try {
+        void supabase.removeChannel(channel);
+      } catch (e) {
+        // ignore
+      }
+    };
+  }, [user, toast]);
 
   return (
     <ProtectedRoute>

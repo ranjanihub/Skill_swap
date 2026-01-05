@@ -48,3 +48,58 @@ export type SkillSwapSession = {
   notes: string | null;
   created_at: string;
 };
+
+export type ConnectionRequest = {
+  id: string;
+  requester_id: string;
+  recipient_id: string;
+  skill_id: string | null;
+  status: 'pending' | 'accepted' | 'rejected';
+  created_at: string;
+};
+
+export type Conversation = {
+  id: string;
+  participant_a: string;
+  participant_b: string;
+  created_at: string;
+};
+
+export type Message = {
+  id: string;
+  conversation_id: string;
+  sender_id: string;
+  body: string;
+  created_at: string;
+};
+
+export type Notification = {
+  id: string;
+  user_id: string;
+  type: string;
+  payload: Record<string, any> | null;
+  read: boolean;
+  created_at: string;
+};
+
+export type UserSettings = {
+  id: string;
+  username?: string | null;
+  display_name?: string | null;
+  avatar_url?: string | null;
+  location?: string | null;
+  timezone?: string | null;
+  teaching_level?: 'beginner' | 'intermediate' | 'advanced' | null;
+  learning_level?: 'beginner' | 'intermediate' | 'advanced' | null;
+  categories?: string[] | null;
+  max_active_exchanges?: number | null;
+  availability?: Record<string, any> | null;
+  session_duration_minutes?: number | null;
+  learning_modes?: string[] | null;
+  buffer_minutes?: number | null;
+  notifications?: Record<string, any> | null;
+  privacy?: Record<string, any> | null;
+  two_factor_enabled?: boolean | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};

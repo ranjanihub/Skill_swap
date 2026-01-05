@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useAuth } from '@/context/auth-context';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, X } from 'lucide-react';
 
 export default function SignupPage() {
   const router = useRouter();
@@ -110,7 +110,15 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-skillswap-100 via-skillswap-50 to-skillswap-200 px-4 sm:px-6 lg:px-8">
+    <div className="relative min-h-screen flex items-center justify-center bg-gradient-to-br from-skillswap-100 via-skillswap-50 to-skillswap-200 px-4 sm:px-6 lg:px-8">
+      <button
+        type="button"
+        onClick={() => router.push('/')}
+        aria-label="Close"
+        className="absolute right-4 top-4 rounded-md p-2 bg-card shadow-sm hover:opacity-90"
+      >
+        <X className="w-5 h-5 text-skillswap-dark" />
+      </button>
       <div className="w-full max-w-md">
         <div className="bg-card rounded-2xl shadow-xl p-8 sm:p-10">
           <div className="text-center mb-8">

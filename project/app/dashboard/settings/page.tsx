@@ -10,6 +10,8 @@ import {
   Skill,
   UserProfile,
 } from '@/lib/supabase';
+import { UserSettings } from '@/lib/supabase';
+import { Switch } from '@/components/ui/switch';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -92,6 +94,7 @@ export default function SettingsPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [dbSetupError, setDbSetupError] = useState<string | null>(null);
+  const [settings, setSettings] = useState<Partial<UserSettings>>({});
 
   const canSave = useMemo(() => true, []);
 
@@ -147,6 +150,19 @@ export default function SettingsPage() {
           bio: (data?.bio as string | null) || '',
         });
 
+        // fetch user settings
+        const { data: settingsData, error: settingsError } = await supabase
+          .from('user_settings')
+          .select('*')
+          .eq('id', user.id)
+          .maybeSingle();
+
+        if (settingsError) {
+          // ignore missing table until migration applied
+        } else if (settingsData) {
+          setSettings(settingsData as UserSettings);
+        }
+
         const { data: skillsData, error: skillsError } = await supabase
           .from('skills')
           .select('*')
@@ -191,6 +207,36 @@ export default function SettingsPage() {
       if (upsertError) throw upsertError;
 
       setSuccess('Profile updated');
+
+      // save settings if table exists
+      try {
+        const payload: Partial<UserSettings> = {
+          id: user.id,
+          username: settings.username ?? null,
+          display_name: settings.display_name ?? null,
+          avatar_url: settings.avatar_url ?? null,
+          location: settings.location ?? null,
+          timezone: settings.timezone ?? null,
+          teaching_level: settings.teaching_level ?? null,
+          learning_level: settings.learning_level ?? null,
+          categories: settings.categories ?? null,
+          max_active_exchanges: settings.max_active_exchanges ?? null,
+          session_duration_minutes: settings.session_duration_minutes ?? null,
+          learning_modes: settings.learning_modes ?? null,
+          buffer_minutes: settings.buffer_minutes ?? null,
+          two_factor_enabled: settings.two_factor_enabled ?? false,
+          notifications: settings.notifications ?? null,
+          privacy: settings.privacy ?? null,
+        };
+
+        const { error: settingsUpsertError } = await supabase.from('user_settings').upsert(payload);
+        if (settingsUpsertError) {
+          // ignore if migration not applied
+          console.warn('Failed to save user settings', settingsUpsertError);
+        }
+      } catch (e) {
+        console.warn('Save settings error', e);
+      }
     } catch (err) {
       const msg = getSupabaseErrorMessage(err, 'Failed to save profile');
       if (isMissingTableSchemaCacheError(msg)) {
@@ -202,6 +248,10 @@ export default function SettingsPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const updateSetting = (patch: Partial<UserSettings>) => {
+    setSettings((s) => ({ ...(s || {}), ...patch }));
   };
 
   const refreshSkills = async () => {
@@ -434,11 +484,31 @@ export default function SettingsPage() {
         </div>
 
         <div>
+          <Label className="text-skillswap-dark">Profile photo (image URL)</Label>
+          <Input
+            value={settings.avatar_url ?? ''}
+            onChange={(e) => updateSetting({ avatar_url: e.target.value })}
+            placeholder="https://..."
+            disabled={saving}
+          />
+        </div>
+
+        <div>
           <Label className="text-skillswap-dark">Full name</Label>
           <Input
             value={draft.full_name}
             onChange={(e) => setDraft((d) => ({ ...d, full_name: e.target.value }))}
             placeholder="Your name"
+            disabled={saving}
+          />
+        </div>
+
+        <div>
+          <Label className="text-skillswap-dark">Username / display name</Label>
+          <Input
+            value={settings.username ?? settings.display_name ?? ''}
+            onChange={(e) => updateSetting({ username: e.target.value, display_name: e.target.value })}
+            placeholder="How you'll appear on SkillSwap"
             disabled={saving}
           />
         </div>
@@ -453,11 +523,18 @@ export default function SettingsPage() {
           />
         </div>
 
-        <Button
-          onClick={save}
-          disabled={saving || !canSave}
-          className="bg-skillswap-500 text-white hover:bg-skillswap-600"
-        >
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <Label className="text-skillswap-dark">Location</Label>
+            <Input value={settings.location ?? ''} onChange={(e) => updateSetting({ location: e.target.value })} />
+          </div>
+          <div>
+            <Label className="text-skillswap-dark">Time zone</Label>
+            <Input value={settings.timezone ?? ''} onChange={(e) => updateSetting({ timezone: e.target.value })} placeholder="e.g., America/Los_Angeles" />
+          </div>
+        </div>
+
+        <Button onClick={save} disabled={saving || !canSave} className="bg-skillswap-500 text-white hover:bg-skillswap-600">
           {saving ? 'Saving...' : 'Save changes'}
         </Button>
       </Card>

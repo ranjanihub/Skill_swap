@@ -19,7 +19,7 @@
 @layer base {
   :root {
     /* Palette from provided image */
-    --background: 333.1 64.4% 91.2%; /* Pink Mist #F7DAE7 */
+    --background: 0 0% 100%; /* White */
     --foreground: 345 34.1% 48.2%; /* Ruby Petals #A55166 */
 
     --card: 0 0% 100%; /* White */
@@ -31,7 +31,7 @@
     --primary-foreground: 0 0% 100%; /* White */
     --secondary: 345.6 44.7% 68.8%; /* Cherry Soda #D38C9D */
     --secondary-foreground: 0 0% 100%; /* White */
-    --muted: 343 44.2% 79.6%; /* Bubblegum #E2B4C1 */
+    --muted: 0 0% 100%; /* White */
     --muted-foreground: 345 34.1% 48.2%;
     --accent: 0 0% 100%; /* White (accent color) */
     --accent-foreground: 345 34.1% 48.2%; /* Ruby Petals */
