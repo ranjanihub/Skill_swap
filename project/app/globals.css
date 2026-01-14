@@ -3,77 +3,45 @@
 @tailwind utilities;
 
 :root {
-  --foreground-rgb: 165, 81, 102; /* #A55166 */
-  --background-start-rgb: 247, 218, 231; /* #F7DAE7 */
-  --background-end-rgb: 226, 180, 193; /* #E2B4C1 */
+  --foreground-rgb: 17, 17, 17; /* Chinese Black #111111 */
+  --background-start-rgb: 231, 227, 221; /* Cream #E7E3DD */
+  --background-end-rgb: 255, 255, 255; /* White #FFFFFF */
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 255, 255, 255; /* #FFFFFF */
-    --background-start-rgb: 165, 81, 102; /* #A55166 */
-    --background-end-rgb: 211, 140, 157; /* #D38C9D */
-  }
-}
 
 @layer base {
   :root {
-    /* Palette from provided image */
-    --background: 0 0% 100%; /* White */
-    --foreground: 345 34.1% 48.2%; /* Ruby Petals #A55166 */
+    /* Theme: Traffic Red (#AA1515), Cream (#E7E3DD), Chinese Black (#111111), White (#FFFFFF) */
+    --background: 36 17% 89%; /* Cream */
+    --foreground: 0 0% 7%; /* Chinese Black */
 
     --card: 0 0% 100%; /* White */
-    --card-foreground: 345 34.1% 48.2%;
-    --popover: 0 0% 100%; /* White */
-    --popover-foreground: 345 34.1% 48.2%;
+    --card-foreground: 0 0% 7%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 7%;
 
-    --primary: 345 34.1% 48.2%; /* Ruby Petals */
+    --primary: 0 78% 37%; /* Traffic Red */
     --primary-foreground: 0 0% 100%; /* White */
-    --secondary: 345.6 44.7% 68.8%; /* Cherry Soda #D38C9D */
-    --secondary-foreground: 0 0% 100%; /* White */
-    --muted: 0 0% 100%; /* White */
-    --muted-foreground: 345 34.1% 48.2%;
-    --accent: 0 0% 100%; /* White (accent color) */
-    --accent-foreground: 345 34.1% 48.2%; /* Ruby Petals */
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 343 44.2% 79.6%; /* Bubblegum */
-    --input: 343 44.2% 79.6%;
-    --ring: 345 34.1% 48.2%; /* Ruby Petals */
+    --secondary: 36 17% 89%; /* Cream */
+    --secondary-foreground: 0 0% 7%;
+    --muted: 36 17% 93%; /* Lighter cream */
+    --muted-foreground: 0 0% 30%;
+    --accent: 0 0% 100%; /* White */
+    --accent-foreground: 0 0% 7%;
+    --destructive: 0 78% 37%; /* Traffic Red */
+    --destructive-foreground: 0 0% 100%;
+    --border: 36 10% 80%;
+    --input: 36 10% 80%;
+    --ring: 0 78% 37%;
 
-    --chart-1: 345 34.1% 48.2%; /* Ruby Petals */
-    --chart-2: 345.6 44.7% 68.8%; /* Cherry Soda */
-    --chart-3: 343 44.2% 79.6%; /* Bubblegum */
-    --chart-4: 333.1 64.4% 91.2%; /* Pink Mist */
-    --chart-5: 0 0% 100%; /* White */
+    --chart-1: 0 78% 37%;
+    --chart-2: 0 0% 7%;
+    --chart-3: 36 17% 89%;
+    --chart-4: 36 17% 93%;
+    --chart-5: 0 0% 100%;
     --radius: 0.5rem;
   }
-  .dark {
-    --background: 345 34.1% 48.2%; /* Ruby Petals */
-    --foreground: 0 0% 100%; /* White */
-    --card: 345.6 44.7% 68.8%; /* Cherry Soda */
-    --card-foreground: 0 0% 100%;
-    --popover: 345.6 44.7% 68.8%;
-    --popover-foreground: 0 0% 100%;
-    --primary: 343 44.2% 79.6%; /* Bubblegum */
-    --primary-foreground: 345 34.1% 48.2%; /* Ruby Petals */
-    --secondary: 345.6 44.7% 68.8%; /* Cherry Soda */
-    --secondary-foreground: 0 0% 100%;
-    --muted: 345.6 44.7% 68.8%;
-    --muted-foreground: 0 0% 100%;
-    --accent: 0 0% 100%; /* White (accent color) */
-    --accent-foreground: 345 34.1% 48.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 343 44.2% 79.6%;
-    --input: 343 44.2% 79.6%;
-    --ring: 0 0% 100%;
-    --chart-1: 0 0% 100%;
-    --chart-2: 343 44.2% 79.6%;
-    --chart-3: 345.6 44.7% 68.8%;
-    --chart-4: 333.1 64.4% 91.2%;
-    --chart-5: 345 34.1% 48.2%;
-  }
+/* Removed dark-mode overrides to enforce single (light) theme */
 }
 
 @layer base {
@@ -81,12 +49,7 @@
     @apply border-border;
   }
   body {
-    @apply text-foreground;
-    background: linear-gradient(
-      180deg,
-      hsl(var(--background)) 0%,
-      hsl(var(--muted)) 100%
-    );
+    @apply bg-background text-foreground;
   }
   html {
     scroll-behavior: smooth;
