@@ -34,6 +34,7 @@ import {
 import WeekGrid from '@/components/calendar/WeekGrid';
 import EventDetailDrawer from '@/components/calendar/EventDetailDrawer';
 import AvailabilityOverlay from '@/components/calendar/AvailabilityOverlay';
+import GanttCalendar from '@/components/GanttCalendar';
 import { useRouter } from 'next/navigation';
 
 export default function CalendarPage() {
@@ -326,7 +327,33 @@ export default function CalendarPage() {
 
           <main className="lg:col-span-6">
             <Card className="p-4">
-              <WeekGrid sessions={sessions} onSelect={(s) => setSelected(s)} />
+              {/* Render a Gantt-style calendar derived from sessions. Falls back to a small sample when no sessions. */}
+              <GanttCalendar
+                tasks={(() => {
+                  if (!sessions || sessions.length === 0) {
+                    return [
+                      { id: 'sample-1', title: 'Design', start: '2026-01-05', end: '2026-01-14', progress: 60 },
+                      { id: 'sample-2', title: 'Development', start: '2026-01-09', end: '2026-01-20', progress: 50 },
+                    ];
+                  }
+
+                  return sessions.map((s) => {
+                    const start = s.scheduled_at ? new Date(s.scheduled_at) : new Date();
+                    const end = new Date(start.getTime() + ((s.duration_minutes ?? 60) * 60 * 1000));
+                    const pad = (d: Date) => d.toISOString().slice(0, 10);
+                    const progress = s.status === 'completed' ? 100 : s.status === 'ongoing' ? 50 : 0;
+                    return {
+                      id: s.id,
+                      title: `Session — ${new Date(s.scheduled_at || '').toLocaleDateString()}`,
+                      start: pad(start),
+                      end: pad(end),
+                      progress,
+                    };
+                  });
+                })()}
+                viewStart={sessions && sessions.length ? new Date(Math.min(...sessions.map((s) => new Date(s.scheduled_at || Date.now()).getTime()))).toISOString().slice(0, 10) : undefined}
+                viewDays={21}
+              />
             </Card>
           </main>
 
