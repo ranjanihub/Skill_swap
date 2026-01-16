@@ -100,6 +100,23 @@ export type UserSettings = {
   notifications?: Record<string, any> | null;
   privacy?: Record<string, any> | null;
   two_factor_enabled?: boolean | null;
+  /* Extended profile fields (LinkedIn-like) */
+  headline?: string | null;
+  industry?: string | null;
+  current_title?: string | null;
+  current_company?: string | null;
+  company_website?: string | null;
+  websites?: string[] | null;
+  phone?: string | null;
+  birthday?: string | null;
+  languages?: string[] | null;
+  experience?: Array<Record<string, any>> | string[] | null;
+  education?: Array<Record<string, any>> | string[] | null;
+  certifications?: string[] | null;
+  licenses?: string[] | null;
+  projects?: string[] | null;
+  publications?: string[] | null;
+  skills?: string[] | null;
   created_at?: string | null;
   updated_at?: string | null;
 };

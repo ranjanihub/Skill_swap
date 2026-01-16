@@ -96,6 +96,15 @@ export default function SettingsPage() {
   const [dbSetupError, setDbSetupError] = useState<string | null>(null);
   const [settings, setSettings] = useState<Partial<UserSettings>>({});
 
+  const arrToCsv = (arr?: string[] | null) => (Array.isArray(arr) ? arr.join(', ') : arr ?? '');
+  const csvToArr = (s?: string | null) => {
+    if (!s) return null;
+    return s
+      .split(',')
+      .map((p) => p.trim())
+      .filter(Boolean);
+  };
+
   const canSave = useMemo(() => true, []);
 
   const ensureUserProfileRow = async () => {
@@ -116,6 +125,15 @@ export default function SettingsPage() {
     if (upsertError) throw upsertError;
   };
 
+  const ensureUserSettingsRow = async () => {
+    if (!user) return;
+    // Create the row with defaults if missing; conflict target is primary key `id`
+    const { error: settingsEnsureError } = await supabase
+      .from('user_settings')
+      .upsert({ id: user.id }, { onConflict: 'id' });
+    if (settingsEnsureError) throw settingsEnsureError;
+  };
+
   useEffect(() => {
     if (authLoading) return;
     if (!user) return;
@@ -133,6 +151,13 @@ export default function SettingsPage() {
         setDbSetupError(null);
 
         await ensureUserProfileRow();
+        // Best-effort ensure settings row exists (ignore if table missing during initial setup)
+        try {
+          await ensureUserSettingsRow();
+        } catch (e) {
+          // If the table doesn't exist yet, we'll still render and allow profile editing
+          console.warn('Ensure settings row failed (likely missing table/migration):', e);
+        }
 
         const { data, error: profileError } = await supabase
           .from('user_profiles')
@@ -202,11 +227,18 @@ export default function SettingsPage() {
         id: user.id,
         full_name: draft.full_name.trim() || null,
         bio: draft.bio.trim() || null,
-      });
+      }, { onConflict: 'id' });
 
       if (upsertError) throw upsertError;
 
-      setSuccess('Profile updated');
+      // Ensure settings row exists before saving settings
+      try {
+        await ensureUserSettingsRow();
+      } catch (e) {
+        const msg = getSupabaseErrorMessage(e, 'Failed to prepare settings for save');
+        setError(msg);
+        throw e;
+      }
 
       // save settings if table exists
       try {
@@ -227,15 +259,52 @@ export default function SettingsPage() {
           two_factor_enabled: settings.two_factor_enabled ?? false,
           notifications: settings.notifications ?? null,
           privacy: settings.privacy ?? null,
+          /* Professional / extended profile fields */
+          headline: settings.headline ?? null,
+          industry: settings.industry ?? null,
+          current_title: settings.current_title ?? null,
+          current_company: settings.current_company ?? null,
+          company_website: settings.company_website ?? null,
+          websites: settings.websites ?? null,
+          phone: settings.phone ?? null,
+          birthday: settings.birthday ?? null,
+          languages: settings.languages ?? null,
+          experience: settings.experience ?? null,
+          education: settings.education ?? null,
+          certifications: settings.certifications ?? null,
+          licenses: settings.licenses ?? null,
+          projects: settings.projects ?? null,
+          publications: settings.publications ?? null,
+          skills: settings.skills ?? null,
         };
-
-        const { error: settingsUpsertError } = await supabase.from('user_settings').upsert(payload);
+        const { data: upsertedSettingsData, error: settingsUpsertError } = await supabase
+          .from('user_settings')
+          .upsert(payload, { onConflict: 'id' });
         if (settingsUpsertError) {
-          // ignore if migration not applied
-          console.warn('Failed to save user settings', settingsUpsertError);
+          const msg = getSupabaseErrorMessage(settingsUpsertError, 'Failed to save settings');
+          setError(msg);
+          throw settingsUpsertError;
         }
+
+        // Refresh settings from DB to confirm persistence and reflect any defaults/triggers
+        try {
+          const { data: refreshed, error: refreshError } = await supabase
+            .from('user_settings')
+            .select('*')
+            .eq('id', user.id)
+            .maybeSingle();
+          if (!refreshError && refreshed) {
+            setSettings(refreshed as UserSettings);
+          }
+        } catch (e) {
+          console.warn('Failed to refresh settings after save', e);
+        }
+
+        setSuccess('Profile and settings updated');
       } catch (e) {
         console.warn('Save settings error', e);
+        // If saving settings fails, bail out (profile is already saved)
+        return;
       }
     } catch (err) {
       const msg = getSupabaseErrorMessage(err, 'Failed to save profile');
@@ -444,7 +513,7 @@ export default function SettingsPage() {
     <div className="space-y-6 max-w-3xl">
       <div>
         <h1 className="text-2xl font-bold text-skillswap-dark">Profile settings</h1>
-        <p className="text-skillswap-600">Update your name and bio.</p>
+        <p className="text-skillswap-600">Update your name, bio, and professional details.</p>
       </div>
 
       {(error || success || dbSetupError) && (
@@ -491,6 +560,91 @@ export default function SettingsPage() {
             placeholder="https://..."
             disabled={saving}
           />
+        </div>
+
+        <div className="pt-4 border-t border-skillswap-100">
+          <h3 className="text-lg font-semibold text-skillswap-dark">Professional / LinkedIn-like info</h3>
+          <p className="text-sm text-skillswap-600">Add headline, current role, experience, and other professional details.</p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+            <div>
+              <Label className="text-skillswap-dark">Headline</Label>
+              <Input value={settings.headline ?? ''} onChange={(e) => updateSetting({ headline: e.target.value })} />
+            </div>
+            <div>
+              <Label className="text-skillswap-dark">Industry</Label>
+              <Input value={settings.industry ?? ''} onChange={(e) => updateSetting({ industry: e.target.value })} />
+            </div>
+            <div>
+              <Label className="text-skillswap-dark">Current title</Label>
+              <Input value={settings.current_title ?? ''} onChange={(e) => updateSetting({ current_title: e.target.value })} />
+            </div>
+            <div>
+              <Label className="text-skillswap-dark">Current company</Label>
+              <Input value={settings.current_company ?? ''} onChange={(e) => updateSetting({ current_company: e.target.value })} />
+            </div>
+            <div>
+              <Label className="text-skillswap-dark">Company website</Label>
+              <Input value={settings.company_website ?? ''} onChange={(e) => updateSetting({ company_website: e.target.value })} />
+            </div>
+            <div>
+              <Label className="text-skillswap-dark">Personal websites (comma separated)</Label>
+              <Input value={arrToCsv(settings.websites)} onChange={(e) => updateSetting({ websites: csvToArr(e.target.value) })} />
+            </div>
+            <div>
+              <Label className="text-skillswap-dark">Phone</Label>
+              <Input value={settings.phone ?? ''} onChange={(e) => updateSetting({ phone: e.target.value })} />
+            </div>
+            <div>
+              <Label className="text-skillswap-dark">Birthday</Label>
+              <Input type="date" value={settings.birthday ?? ''} onChange={(e) => updateSetting({ birthday: e.target.value })} />
+            </div>
+            <div>
+              <Label className="text-skillswap-dark">Languages (comma separated)</Label>
+              <Input value={arrToCsv(settings.languages)} onChange={(e) => updateSetting({ languages: csvToArr(e.target.value) })} />
+            </div>
+            <div>
+              <Label className="text-skillswap-dark">Skills (comma separated)</Label>
+              <Input value={arrToCsv(settings.skills)} onChange={(e) => updateSetting({ skills: csvToArr(e.target.value) })} />
+            </div>
+          </div>
+
+          <div className="mt-3">
+            <Label className="text-skillswap-dark">Experience (one entry per line)</Label>
+            <Textarea
+              value={(settings.experience || []).map((i) => (typeof i === 'string' ? i : JSON.stringify(i))).join('\n')}
+              onChange={(e) => updateSetting({ experience: e.target.value.split('\n').map((l) => l.trim()).filter(Boolean) })}
+              placeholder="Company – Title – Dates – brief description"
+            />
+          </div>
+
+          <div className="mt-3">
+            <Label className="text-skillswap-dark">Education (one entry per line)</Label>
+            <Textarea
+              value={(settings.education || []).map((i) => (typeof i === 'string' ? i : JSON.stringify(i))).join('\n')}
+              onChange={(e) => updateSetting({ education: e.target.value.split('\n').map((l) => l.trim()).filter(Boolean) })}
+              placeholder="School – Degree – Years"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+            <div>
+              <Label className="text-skillswap-dark">Certifications (comma separated)</Label>
+              <Input value={arrToCsv(settings.certifications)} onChange={(e) => updateSetting({ certifications: csvToArr(e.target.value) })} />
+            </div>
+            <div>
+              <Label className="text-skillswap-dark">Licenses (comma separated)</Label>
+              <Input value={arrToCsv(settings.licenses)} onChange={(e) => updateSetting({ licenses: csvToArr(e.target.value) })} />
+            </div>
+            <div>
+              <Label className="text-skillswap-dark">Projects (comma separated)</Label>
+              <Input value={arrToCsv(settings.projects)} onChange={(e) => updateSetting({ projects: csvToArr(e.target.value) })} />
+            </div>
+            <div>
+              <Label className="text-skillswap-dark">Publications (comma separated)</Label>
+              <Input value={arrToCsv(settings.publications)} onChange={(e) => updateSetting({ publications: csvToArr(e.target.value) })} />
+            </div>
+          </div>
         </div>
 
         <div>
@@ -666,6 +820,14 @@ export default function SettingsPage() {
                           <Button
                             variant="outline"
                             size="sm"
+                            onClick={() => (window.location.href = `/dashboard/skill-assessment?skillId=${s.id}`)}
+                            disabled={saving}
+                          >
+                            Test
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
                             onClick={() => deleteSkill(s)}
                             disabled={saving}
                           >
@@ -811,6 +973,14 @@ export default function SettingsPage() {
                               disabled={saving}
                             >
                               Edit
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => (window.location.href = `/dashboard/skill-assessment?skillId=${s.id}`)}
+                              disabled={saving}
+                            >
+                              Test
                             </Button>
                             <Button
                               variant="outline"

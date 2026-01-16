@@ -9,6 +9,7 @@ import {
   supabaseConfigError,
   Skill,
   UserProfile,
+  UserSettings,
 } from '@/lib/supabase';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -20,6 +21,7 @@ export default function PublicViewPage() {
 
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [skills, setSkills] = useState<Skill[]>([]);
+  const [settings, setSettings] = useState<Partial<UserSettings>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -46,6 +48,21 @@ export default function PublicViewPage() {
 
         if (profileError) throw profileError;
         setProfile((profileData || null) as PublicProfile | null);
+
+        // fetch public-facing settings for preview (may be missing if migration not applied)
+        try {
+          const { data: settingsData, error: settingsError } = await supabase
+            .from('user_settings')
+            .select('*')
+            .eq('id', user.id)
+            .maybeSingle();
+
+          if (!settingsError && settingsData) {
+            setSettings(settingsData as UserSettings);
+          }
+        } catch (e) {
+          console.warn('Failed to load user settings for public view', e);
+        }
 
         const { data: skillsData, error: skillsError } = await supabase
           .from('skills')
@@ -89,7 +106,7 @@ export default function PublicViewPage() {
     );
   }
 
-  const name = profile?.full_name || (user?.user_metadata?.full_name as string | undefined) || 'SkillSwap member';
+  const displayName = (settings.display_name || settings.username || profile?.full_name || (user?.user_metadata?.full_name as string | undefined) || 'SkillSwap member') as string;
 
   return (
     <div className="space-y-6 max-w-5xl">
@@ -99,9 +116,33 @@ export default function PublicViewPage() {
       </div>
 
       <Card className="p-6 bg-white border-2 border-skillswap-200">
-        <h2 className="text-xl font-semibold text-skillswap-dark">{name}</h2>
-        <p className="text-sm text-skillswap-600 mt-1">{user?.email}</p>
+        <div className="flex items-start gap-4">
+          {settings.avatar_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={settings.avatar_url} alt={`Avatar for ${displayName}`} className="w-24 h-24 rounded-full object-cover" />
+          ) : (
+            <div className="w-24 h-24 rounded-full bg-skillswap-100 flex items-center justify-center text-xl font-medium text-skillswap-600">{(displayName || 'S').charAt(0)}</div>
+          )}
+          <div>
+            <h2 className="text-xl font-semibold text-skillswap-dark">{displayName}</h2>
+            {settings.headline && <p className="text-sm text-skillswap-600">{settings.headline}</p>}
+            {settings.current_title && (
+              <p className="text-sm text-skillswap-600 mt-1">{settings.current_title}{settings.current_company ? ` — ${settings.current_company}` : ''}</p>
+            )}
+            <p className="text-sm text-skillswap-600 mt-1">{user?.email}</p>
+          </div>
+        </div>
+
         {profile?.bio && <p className="text-skillswap-600 mt-4">{profile.bio}</p>}
+
+        <div className="mt-4 space-y-1 text-sm text-skillswap-600">
+          {settings.location && <div>Location: {settings.location}</div>}
+          {settings.timezone && <div>Timezone: {settings.timezone}</div>}
+          {settings.languages && settings.languages.length > 0 && <div>Languages: {(settings.languages || []).join(', ')}</div>}
+          {settings.websites && settings.websites.length > 0 && (
+            <div>Websites: {(settings.websites || []).map((w, i) => <span key={i} className="mr-2">{w}</span>)}</div>
+          )}
+        </div>
       </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
