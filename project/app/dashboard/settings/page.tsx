@@ -93,6 +93,8 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const AVATAR_BUCKET = 'avatars';
   const [dbSetupError, setDbSetupError] = useState<string | null>(null);
   const [settings, setSettings] = useState<Partial<UserSettings>>({});
 
@@ -112,17 +114,38 @@ export default function SettingsPage() {
     const fullNameFromMetadata =
       (user.user_metadata?.full_name as string | undefined) ||
       (user.email?.split('@')[0] ?? '');
+    try {
+      const { error: upsertError } = await supabase.from('user_profiles').upsert(
+        {
+          id: user.id,
+          full_name: fullNameFromMetadata.trim() || null,
+          bio: null,
+        },
+        { onConflict: 'id' }
+      );
 
-    const { error: upsertError } = await supabase.from('user_profiles').upsert(
-      {
-        id: user.id,
-        full_name: fullNameFromMetadata.trim() || null,
-        bio: null,
-      },
-      { onConflict: 'id' }
-    );
-
-    if (upsertError) throw upsertError;
+      if (upsertError) throw upsertError;
+    } catch (err) {
+      const msg = getSupabaseErrorMessage(err, 'Failed to ensure profile row');
+      // If RLS blocked us (common when the session token isn't applied yet), call server endpoint that uses service-role key
+      if (typeof msg === 'string' && msg.toLowerCase().includes('row-level')) {
+        try {
+          const res = await fetch('/api/ensure-profile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: user.id, full_name: fullNameFromMetadata.trim() || null, bio: null }),
+          });
+          if (!res.ok) {
+            const json = await res.json();
+            throw new Error(json?.error || 'Server failed to create profile');
+          }
+          return;
+        } catch (e) {
+          throw e;
+        }
+      }
+      throw err;
+    }
   };
 
   const ensureUserSettingsRow = async () => {
@@ -318,6 +341,9 @@ export default function SettingsPage() {
       setSaving(false);
     }
   };
+
+  const teach = useMemo(() => skills.filter((s) => s.skill_type === 'teach'), [skills]);
+  const learn = useMemo(() => skills.filter((s) => s.skill_type === 'learn'), [skills]);
 
   const updateSetting = (patch: Partial<UserSettings>) => {
     setSettings((s) => ({ ...(s || {}), ...patch }));
@@ -553,13 +579,70 @@ export default function SettingsPage() {
         </div>
 
         <div>
-          <Label className="text-skillswap-dark">Profile photo (image URL)</Label>
-          <Input
-            value={settings.avatar_url ?? ''}
-            onChange={(e) => updateSetting({ avatar_url: e.target.value })}
-            placeholder="https://..."
-            disabled={saving}
-          />
+          <Label className="text-skillswap-dark">Profile photo</Label>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
+              {settings.avatar_url ? (
+                // preview
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={settings.avatar_url} alt="Avatar" className="w-20 h-20 rounded-full object-cover border" />
+              ) : (
+                <div className="w-20 h-20 rounded-full bg-skillswap-50 flex items-center justify-center text-sm text-skillswap-600 border">No photo</div>
+              )}
+            </div>
+
+            <div className="flex-1">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file || !user) return;
+                  setUploadingAvatar(true);
+                  setError('');
+                  try {
+                    const path = `${AVATAR_BUCKET}/${user.id}/${Date.now()}_${file.name}`;
+                    const { error: uploadError } = await supabase.storage.from(AVATAR_BUCKET).upload(path, file, { upsert: true });
+                    if (uploadError) {
+                      // Handle common missing-bucket case with actionable guidance
+                      const msg = (uploadError.message || String(uploadError)).toLowerCase();
+                      if (msg.includes('bucket') || msg.includes('does not exist') || msg.includes('not found')) {
+                        setError(
+                          `Storage bucket "${AVATAR_BUCKET}" not found. Create a bucket named "${AVATAR_BUCKET}" in your Supabase project (Storage → Buckets), make it public or configure appropriate policies, then reload this page.`
+                        );
+                        return;
+                      }
+                      throw uploadError;
+                    }
+
+                    const publicUrl = supabase.storage.from(AVATAR_BUCKET).getPublicUrl(path).data?.publicUrl;
+                    if (!publicUrl) throw new Error('Failed to get public URL for avatar');
+                    updateSetting({ avatar_url: publicUrl });
+                    setSuccess('Avatar uploaded (remember to click Save)');
+                  } catch (err) {
+                    setError(typeof err === 'string' ? err : (err as Error)?.message || 'Failed to upload avatar');
+                  } finally {
+                    setUploadingAvatar(false);
+                  }
+                }}
+                disabled={saving || uploadingAvatar}
+                className="file:border-0 file:bg-transparent file:text-sm file:font-medium"
+              />
+
+              <div className="mt-2 flex gap-2 items-center">
+                <button
+                  type="button"
+                  onClick={() => updateSetting({ avatar_url: null })}
+                  disabled={saving || uploadingAvatar}
+                  className="text-sm text-destructive"
+                >
+                  Remove photo
+                </button>
+                {uploadingAvatar && <span className="text-sm text-skillswap-600">Uploading…</span>}
+              </div>
+              <p className="text-xs text-skillswap-600 mt-2">You can upload an image; click Save to persist.</p>
+            </div>
+          </div>
         </div>
 
         <div className="pt-4 border-t border-skillswap-100">
@@ -571,22 +654,7 @@ export default function SettingsPage() {
               <Label className="text-skillswap-dark">Headline</Label>
               <Input value={settings.headline ?? ''} onChange={(e) => updateSetting({ headline: e.target.value })} />
             </div>
-            <div>
-              <Label className="text-skillswap-dark">Industry</Label>
-              <Input value={settings.industry ?? ''} onChange={(e) => updateSetting({ industry: e.target.value })} />
-            </div>
-            <div>
-              <Label className="text-skillswap-dark">Current title</Label>
-              <Input value={settings.current_title ?? ''} onChange={(e) => updateSetting({ current_title: e.target.value })} />
-            </div>
-            <div>
-              <Label className="text-skillswap-dark">Current company</Label>
-              <Input value={settings.current_company ?? ''} onChange={(e) => updateSetting({ current_company: e.target.value })} />
-            </div>
-            <div>
-              <Label className="text-skillswap-dark">Company website</Label>
-              <Input value={settings.company_website ?? ''} onChange={(e) => updateSetting({ company_website: e.target.value })} />
-            </div>
+            
             <div>
               <Label className="text-skillswap-dark">Personal websites (comma separated)</Label>
               <Input value={arrToCsv(settings.websites)} onChange={(e) => updateSetting({ websites: csvToArr(e.target.value) })} />
@@ -632,10 +700,7 @@ export default function SettingsPage() {
               <Label className="text-skillswap-dark">Certifications (comma separated)</Label>
               <Input value={arrToCsv(settings.certifications)} onChange={(e) => updateSetting({ certifications: csvToArr(e.target.value) })} />
             </div>
-            <div>
-              <Label className="text-skillswap-dark">Licenses (comma separated)</Label>
-              <Input value={arrToCsv(settings.licenses)} onChange={(e) => updateSetting({ licenses: csvToArr(e.target.value) })} />
-            </div>
+            
             <div>
               <Label className="text-skillswap-dark">Projects (comma separated)</Label>
               <Input value={arrToCsv(settings.projects)} onChange={(e) => updateSetting({ projects: csvToArr(e.target.value) })} />
@@ -691,6 +756,82 @@ export default function SettingsPage() {
         <Button onClick={save} disabled={saving || !canSave} className="bg-skillswap-500 text-white hover:bg-skillswap-600">
           {saving ? 'Saving...' : 'Save changes'}
         </Button>
+      </Card>
+
+      <div className="mt-6">
+        <h2 className="text-xl font-bold text-skillswap-dark">Public profile preview</h2>
+        <p className="text-sm text-skillswap-600">How your profile will appear to others.</p>
+      </div>
+
+      <Card className="p-6 bg-white border-2 border-skillswap-200">
+        <div className="flex items-start gap-4">
+          {settings.avatar_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={settings.avatar_url} alt={`Avatar for ${settings.display_name || settings.username || draft.full_name}`} className="w-24 h-24 rounded-full object-cover" />
+          ) : (
+            <div className="w-24 h-24 rounded-full bg-skillswap-100 flex items-center justify-center text-xl font-medium text-skillswap-600">{(settings.display_name || settings.username || draft.full_name || 'S').charAt(0)}</div>
+          )}
+          <div>
+            <h2 className="text-xl font-semibold text-skillswap-dark">{settings.display_name || settings.username || draft.full_name || 'SkillSwap member'}</h2>
+            {settings.headline && <p className="text-sm text-skillswap-600">{settings.headline}</p>}
+            <p className="text-sm text-skillswap-600 mt-1">{user?.email}</p>
+          </div>
+        </div>
+
+        {draft.bio && <p className="text-skillswap-600 mt-4">{draft.bio}</p>}
+
+        <div className="mt-4 space-y-1 text-sm text-skillswap-600">
+          {settings.location && <div>Location: {settings.location}</div>}
+          {settings.timezone && <div>Timezone: {settings.timezone}</div>}
+          {settings.languages && settings.languages.length > 0 && <div>Languages: {(settings.languages || []).join(', ')}</div>}
+          {settings.websites && settings.websites.length > 0 && (
+            <div>Websites: {(settings.websites || []).map((w, i) => <span key={i} className="mr-2">{w}</span>)}</div>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+          <Card className="p-6 bg-white border-2 border-skillswap-200">
+            <h3 className="font-semibold text-skillswap-dark mb-4">Teaching</h3>
+            {teach.length === 0 ? (
+              <p className="text-sm text-skillswap-600">No teaching skills yet.</p>
+            ) : (
+              <div className="space-y-3">
+                {teach.map((s) => (
+                  <div key={s.id} className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-medium text-skillswap-dark">{s.name}</p>
+                      {(s.category || s.description) && (
+                        <p className="text-sm text-skillswap-600">{s.category || s.description}</p>
+                      )}
+                    </div>
+                    <Badge variant="outline">{s.proficiency_level}</Badge>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+
+          <Card className="p-6 bg-white border-2 border-skillswap-200">
+            <h3 className="font-semibold text-skillswap-dark mb-4">Learning</h3>
+            {learn.length === 0 ? (
+              <p className="text-sm text-skillswap-600">No learning goals yet.</p>
+            ) : (
+              <div className="space-y-3">
+                {learn.map((s) => (
+                  <div key={s.id} className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-medium text-skillswap-dark">{s.name}</p>
+                      {(s.category || s.description) && (
+                        <p className="text-sm text-skillswap-600">{s.category || s.description}</p>
+                      )}
+                    </div>
+                    <Badge variant="outline">{s.proficiency_level}</Badge>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        </div>
       </Card>
 
       <div>

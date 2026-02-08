@@ -79,7 +79,7 @@ export default function SignupPage() {
       if (result.signedIn) {
         setSuccess('Account created! Redirecting to dashboard...');
         setTimeout(() => {
-          router.push('/dashboard');
+          router.push('/');
         }, 1200);
       } else {
         setSuccess('Account created! Please check your email to confirm your account, then log in.');

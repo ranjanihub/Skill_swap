@@ -20,6 +20,7 @@ type Props = {
   nav: ShellNavItem[];
   bottomNav?: ShellNavItem[];
   bottomActions?: React.ReactNode;
+  showSidebar?: boolean;
 };
 
 export default function AppShell({
@@ -29,12 +30,15 @@ export default function AppShell({
   nav,
   bottomNav = [],
   bottomActions,
+  showSidebar = true,
 }: Props) {
   const pathname = usePathname();
+  const showMobileBottomNav = !showSidebar && bottomNav.length > 0;
 
   return (
     <div className="min-h-screen bg-background">
-      <aside className="fixed inset-y-0 left-0 w-[76px] bg-white border-r border-skillswap-200 flex flex-col items-center py-4">
+      {showSidebar && (
+        <aside className="fixed inset-y-0 left-0 w-[76px] bg-white border-r border-skillswap-200 flex flex-col items-center py-4">
         <Button
           type="button"
           variant="ghost"
@@ -94,16 +98,41 @@ export default function AppShell({
 
           {bottomActions}
         </div>
-      </aside>
+        </aside>
+      )}
 
-      <div className="min-h-screen pl-[76px] flex flex-col min-w-0">
+      <div className={cn('min-h-screen flex flex-col min-w-0', showSidebar && 'pl-[76px]')}>
         <header className="h-16 bg-white border-b border-skillswap-200 flex items-center justify-between px-4 sm:px-6">
           <div className="min-w-0">{headerLeft}</div>
           <div className="flex items-center gap-1 sm:gap-2">{headerRight}</div>
         </header>
 
-        <main className="flex-1 p-4 sm:p-6">{children}</main>
+        <main className={cn('flex-1 p-4 sm:p-6', showMobileBottomNav && 'pb-24')}>{children}</main>
       </div>
+      {/* Mobile bottom navigation when no left sidebar */}
+      {showMobileBottomNav && (
+        <nav className="fixed inset-x-0 bottom-0 h-16 bg-white border-t border-skillswap-200 flex items-center justify-around px-4 sm:px-8">
+          {bottomNav.map((item) => {
+            const isActive = pathname === item.href;
+            const Icon = item.icon;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  'bottom-nav-item',
+                  isActive && 'text-skillswap-500'
+                )}
+                aria-label={item.label}
+                title={item.label}
+              >
+                <Icon className="h-5 w-5" />
+                <span className="text-[11px]">{item.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
+      )}
     </div>
   );
 }

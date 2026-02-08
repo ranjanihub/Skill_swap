@@ -2,42 +2,36 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --foreground-rgb: 17, 17, 17; /* Chinese Black #111111 */
-  --background-start-rgb: 231, 227, 221; /* Cream #E7E3DD */
-  --background-end-rgb: 255, 255, 255; /* White #FFFFFF */
-}
-
 
 @layer base {
   :root {
-    /* Theme: Traffic Red (#AA1515), Cream (#E7E3DD), Chinese Black (#111111), White (#FFFFFF) */
-    --background: 36 17% 89%; /* Cream */
-    --foreground: 0 0% 7%; /* Chinese Black */
+    /* Blue-centric Theme */
+    --background: 210 96% 98%; /* very light blue */
+    --foreground: 206 86% 11%; /* dark teal-ish */
 
     --card: 0 0% 100%; /* White */
-    --card-foreground: 0 0% 7%;
+    --card-foreground: 210 90% 12%;
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 7%;
+    --popover-foreground: 210 90% 12%;
 
-    --primary: 0 78% 37%; /* Traffic Red */
+    --primary: 213 89% 43%; /* #0A66C2 */
     --primary-foreground: 0 0% 100%; /* White */
-    --secondary: 36 17% 89%; /* Cream */
-    --secondary-foreground: 0 0% 7%;
-    --muted: 36 17% 93%; /* Lighter cream */
-    --muted-foreground: 0 0% 30%;
-    --accent: 0 0% 100%; /* White */
-    --accent-foreground: 0 0% 7%;
-    --destructive: 0 78% 37%; /* Traffic Red */
+    --secondary: 210 96% 94%; /* very light blue */
+    --secondary-foreground: 210 90% 12%;
+    --muted: 210 96% 98%;
+    --muted-foreground: 210 90% 40%;
+    --accent: 213 89% 43%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 85% 50%; /* pink/red for destructive if needed */
     --destructive-foreground: 0 0% 100%;
-    --border: 36 10% 80%;
-    --input: 36 10% 80%;
-    --ring: 0 78% 37%;
+    --border: 210 90% 92%;
+    --input: 210 96% 94%;
+    --ring: 213 89% 43%;
 
-    --chart-1: 0 78% 37%;
-    --chart-2: 0 0% 7%;
-    --chart-3: 36 17% 89%;
-    --chart-4: 36 17% 93%;
+    --chart-1: 213 89% 43%;
+    --chart-2: 210 90% 12%;
+    --chart-3: 210 96% 94%;
+    --chart-4: 210 96% 98%;
     --chart-5: 0 0% 100%;
     --radius: 0.5rem;
   }
@@ -50,8 +44,32 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
   }
   html {
     scroll-behavior: smooth;
+  }
+}
+
+/* Pixel adjustments for mobile header, cards, and bottom nav to match Figma */
+@layer utilities {
+  .mobile-header-search {
+    @apply h-10 rounded-full bg-white/90 border border-transparent px-3 text-sm shadow-sm;
+  }
+
+  .feed-card {
+    @apply bg-white rounded-lg shadow-sm border border-skillswap-200 p-4;
+  }
+
+  .btn-primary-rounded {
+    @apply px-4 py-2 rounded-full bg-skillswap-500 text-white text-sm;
+  }
+
+  .btn-outline-rounded {
+    @apply px-4 py-2 rounded-full bg-white border border-skillswap-200 text-skillswap-600 text-sm;
+  }
+
+  .bottom-nav-item {
+    @apply flex flex-col items-center justify-center gap-0.5 text-xs text-skillswap-600;
   }
 }

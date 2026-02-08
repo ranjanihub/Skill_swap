@@ -11,6 +11,8 @@ import {
   Users,
   UserRound,
   Bell,
+  Compass,
+  UserCircle,
 } from 'lucide-react';
 
 import { ProtectedRoute } from '@/components/protected-route';
@@ -24,14 +26,17 @@ import { useToast } from '@/hooks/use-toast';
 import AppShell from '@/components/app-shell';
 
 const nav = [
-  { href: '/dashboard', label: 'Home', icon: Home },
-  { href: '/dashboard/public-view', label: 'User public view', icon: UserRound },
-  { href: '/dashboard/connections', label: 'Connections', icon: Users },
-  { href: '/dashboard/calendar', label: 'Calendar', icon: CalendarDays },
-  { href: '/dashboard/messages', label: 'Messages', icon: MessageSquare },
+  { href: '/', label: 'Home', icon: Home },
+  { href: '/explore', label: 'Explore Skills', icon: Compass },
 ];
 
-const bottomNav = [{ href: '/dashboard/settings', label: 'Profile settings', icon: Settings }];
+const bottomNav = [
+  { href: '/', label: 'Home', icon: Home },
+  { href: '/network', label: 'My Network', icon: Users },
+  { href: '/calendar', label: 'Calender', icon: CalendarDays },
+  { href: '/notifications', label: 'Notification', icon: Bell },
+  { href: '/dashboard/settings', label: 'Profile', icon: UserCircle },
+];
 
 function initials(name?: string | null) {
   const safe = (name || '').trim();
@@ -109,6 +114,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <ProtectedRoute>
       <AppShell
+        showSidebar={false}
         nav={nav}
         bottomNav={bottomNav}
         bottomActions={
@@ -141,6 +147,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               size="icon"
               className="text-skillswap-600 hover:bg-skillswap-50"
               aria-label="Notifications"
+              onClick={() => router.push('/notifications')}
             >
               <Bell className="h-5 w-5" />
             </Button>

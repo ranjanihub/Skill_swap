@@ -61,28 +61,24 @@ const config: Config = {
           '5': 'hsl(var(--chart-5) / <alpha-value>)',
         },
         skillswap: {
-          // Theme palette
-          // Traffic Red: #AA1515
-          // Cream:       #E7E3DD
-          // Chinese Black:#111111
-          // White:       #FFFFFF
-          50: '#FFFFFF',
-          100: '#F3F1EC',
-          200: '#E7E3DD',
-          300: '#D8D3CC',
-          400: '#AA1515',
-          500: '#AA1515',
-          600: '#8F1212',
-          700: '#740E0E',
-          800: '#111111',
-          900: '#111111',
-          dark: '#AA1515',
+          // Updated theme palette to a blue-centric UI (LinkedIn-like)
+          50: '#F3F8FF',
+          100: '#E6F0FF',
+          200: '#CCE3FF',
+          300: '#99C8FF',
+          400: '#4DA6FF',
+          500: '#0A66C2',
+          600: '#0955A0',
+          700: '#07457F',
+          800: '#032834',
+          900: '#001726',
+          dark: '#0A66C2',
 
-          primary: '#AA1515',
-          secondary: '#E7E3DD',
-          background: '#E7E3DD',
-          text: '#111111',
-          cta: '#AA1515',
+          primary: '#0A66C2',
+          secondary: '#E6F0FF',
+          background: '#F3F8FF',
+          text: '#032834',
+          cta: '#0A66C2',
         },
       },
       keyframes: {

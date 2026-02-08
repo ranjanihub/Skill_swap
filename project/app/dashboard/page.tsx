@@ -1017,22 +1017,22 @@ export default function DashboardHomePage() {
     () => [
       { title: 'Home', subtitle: 'Your overview', icon: BookOpen, href: '/dashboard' },
       {
-        title: 'Connections',
-        subtitle: 'Find people',
+        title: 'My Network',
+        subtitle: 'Invitations & connections',
         icon: Users,
-        href: '/dashboard/connections',
+        href: '/network',
       },
       {
         title: 'Calendar',
         subtitle: 'Schedule swaps',
         icon: CalendarDays,
-        href: '/dashboard/calendar',
+        href: '/calendar',
       },
       {
         title: 'Messages',
         subtitle: 'Chat updates',
         icon: MessageSquare,
-        href: '/dashboard/messages',
+        href: '/messages',
       },
     ],
     []
@@ -1055,6 +1055,51 @@ export default function DashboardHomePage() {
     ],
     []
   );
+
+  const [topSkills, setTopSkills] = useState<{ id: string; name: string; count: number }[]>([]);
+
+  useEffect(() => {
+    if (!user) return;
+    if (!isSupabaseConfigured) return;
+
+    const fetchTopSkills = async () => {
+      try {
+        const { data: completed, error: completedError } = await supabase
+          .from('skill_swap_sessions')
+          .select('skill_a_id,skill_b_id')
+          .in('status', ['completed']);
+
+        if (completedError) throw completedError;
+        const counts = new Map<string, number>();
+        (completed || []).forEach((s: any) => {
+          if (s.skill_a_id) counts.set(s.skill_a_id, (counts.get(s.skill_a_id) || 0) + 1);
+          if (s.skill_b_id) counts.set(s.skill_b_id, (counts.get(s.skill_b_id) || 0) + 1);
+        });
+
+        const ids = Array.from(counts.keys());
+        if (ids.length === 0) {
+          setTopSkills([]);
+          return;
+        }
+
+        const { data: skillsData, error: skillsError } = await supabase
+          .from('skills')
+          .select('id,name')
+          .in('id', ids);
+
+        if (skillsError) throw skillsError;
+
+        const skillMap = new Map((skillsData || []).map((s: any) => [s.id, s.name]));
+        const arr = ids.map((id) => ({ id, name: skillMap.get(id) || 'Unknown skill', count: counts.get(id) || 0 }));
+        arr.sort((a, b) => b.count - a.count);
+        setTopSkills(arr.slice(0, 3));
+      } catch (e) {
+        console.warn('Failed to fetch top skills', e);
+      }
+    };
+
+    void fetchTopSkills();
+  }, [user]);
 
   if (authLoading || loading) {
     return (
@@ -1123,49 +1168,35 @@ export default function DashboardHomePage() {
         </div>
 
         <Card className="p-5 bg-white border-2 border-skillswap-200">
-          <div className="flex items-center justify-between gap-3 mb-4">
-            <div>
-              <p className="font-semibold text-skillswap-dark">Statistic</p>
-              <p className="text-sm text-skillswap-600">Progress score</p>
-            </div>
-            <div className="flex items-center gap-3 text-xs text-skillswap-600">
-              <span className="inline-flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-[hsl(var(--chart-1))]" /> Average
-              </span>
-              <span className="inline-flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-[hsl(var(--chart-3))]" /> Swaps
-              </span>
+          <div className="mb-2" />
+
+          <div>
+            <h3 className="text-lg font-semibold text-skillswap-dark">Top 3 swapped skills</h3>
+            <p className="text-sm text-skillswap-600">Most frequently exchanged skills (completed swaps)</p>
+
+            <div className="mt-4 space-y-3">
+              {topSkills.length === 0 ? (
+                <p className="text-sm text-skillswap-600">No swaps yet.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {topSkills.map((s, i) => (
+                    <li key={s.id} className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-md bg-skillswap-50 flex items-center justify-center text-sm font-medium text-skillswap-600">
+                          {i + 1}
+                        </div>
+                        <div>
+                          <p className="font-medium text-skillswap-dark">{s.name}</p>
+                          <p className="text-xs text-skillswap-600">{s.count} completed swaps</p>
+                        </div>
+                      </div>
+                      <div className="text-sm text-skillswap-600">&nbsp;</div>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
-
-          <ChartContainer
-            className="h-[260px]"
-            config={{
-              average: { label: 'Average', color: 'hsl(var(--chart-1))' },
-              swaps: { label: 'Swaps', color: 'hsl(var(--chart-3))' },
-            }}
-          >
-            <LineChart data={chartData} margin={{ top: 10, right: 16, bottom: 0, left: -6 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="month" tickLine={false} axisLine={false} />
-              <YAxis hide />
-              <ChartTooltip content={<ChartTooltipContent />} />
-              <Line
-                type="monotone"
-                dataKey="average"
-                stroke="var(--color-average)"
-                strokeWidth={2}
-                dot={false}
-              />
-              <Line
-                type="monotone"
-                dataKey="swaps"
-                stroke="var(--color-swaps)"
-                strokeWidth={2}
-                dot={false}
-              />
-            </LineChart>
-          </ChartContainer>
         </Card>
       </section>
 
@@ -1173,7 +1204,7 @@ export default function DashboardHomePage() {
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-skillswap-dark">User profile</h2>
           <Link
-            href="/dashboard/public-view"
+            href="/dashboard/settings"
             className="text-sm text-skillswap-500 hover:text-skillswap-600"
           >
             View

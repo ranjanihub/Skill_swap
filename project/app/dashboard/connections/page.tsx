@@ -1,4 +1,10 @@
-"use client";
+import { redirect } from 'next/navigation';
+
+export default function ConnectionsRedirectPage() {
+  redirect('/network');
+}
+
+/*
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -7,8 +13,9 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Users, MessageSquare, Eye, Calendar, Star, MoreHorizontal } from 'lucide-react';
+import { Users, MessageSquare, Eye, Star, MoreHorizontal } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
+import { useToast } from '@/hooks/use-toast';
 import {
   isSupabaseConfigured,
   supabase,
@@ -33,10 +40,15 @@ type ConnectionItem = {
 export default function ConnectionsPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
+  const { toast } = useToast();
 
   const [connections, setConnections] = useState<ConnectionItem[]>([]);
   const [profilesById, setProfilesById] = useState<Record<string, PublicProfile>>({});
   const [skillsByUser, setSkillsByUser] = useState<Record<string, Skill[]>>({});
+  const [allSkills, setAllSkills] = useState<Skill[]>([]);
+  const [requestsBySkillId, setRequestsBySkillId] = useState<Record<string, ConnectionRequest[]>>({});
+  const [completedSessionsBySkillId, setCompletedSessionsBySkillId] = useState<Record<string, any[]>>({});
+  const [sendingRequests, setSendingRequests] = useState<Record<string, boolean>>({});
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -119,6 +131,37 @@ export default function ConnectionsPage() {
           });
         }
 
+        // Map connection requests by skill id
+        const reqsBySkill: Record<string, ConnectionRequest[]> = {};
+        (requests || []).forEach((r) => {
+          if (r.skill_id) {
+            reqsBySkill[r.skill_id] = reqsBySkill[r.skill_id] || [];
+            reqsBySkill[r.skill_id].push(r);
+          }
+        });
+
+        // Map completed sessions by skill id (sessions fetched above are completed)
+        const sessionsBySkill: Record<string, any[]> = {};
+        (sessions || []).forEach((s) => {
+          if (s.skill_a_id) {
+            sessionsBySkill[s.skill_a_id] = sessionsBySkill[s.skill_a_id] || [];
+            sessionsBySkill[s.skill_a_id].push(s);
+          }
+          if (s.skill_b_id) {
+            sessionsBySkill[s.skill_b_id] = sessionsBySkill[s.skill_b_id] || [];
+            sessionsBySkill[s.skill_b_id].push(s);
+          }
+        });
+
+        // Also fetch recent public skills to show before any search is entered
+        try {
+          const { data: recentSkills } = await supabase.from('skills').select('*').order('created_at', { ascending: false }).limit(200);
+          setAllSkills((recentSkills || []) as Skill[]);
+        } catch (e) {
+          console.warn('Failed to fetch all skills preview', e);
+          setAllSkills([]);
+        }
+
         const profileMap: Record<string, PublicProfile> = {};
         profiles.forEach((p) => (profileMap[p.id] = p));
 
@@ -174,6 +217,8 @@ export default function ConnectionsPage() {
         const list = Object.values(map);
         setProfilesById(profileMap);
         setSkillsByUser(skillsMap);
+        setRequestsBySkillId(reqsBySkill);
+        setCompletedSessionsBySkillId(sessionsBySkill);
         setConnections(list);
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Failed to load connections';
@@ -212,6 +257,49 @@ export default function ConnectionsPage() {
       });
   }, [connections, search, tab, statusFilter]);
 
+  const getSkillStatus = (skill: Skill) => {
+    // completed session takes precedence
+    if (completedSessionsBySkillId[skill.id] && completedSessionsBySkillId[skill.id].length > 0) return 'completed';
+    const reqs = requestsBySkillId[skill.id] || [];
+    if (reqs.length === 0) return 'none';
+    if (reqs.some((r) => r.status === 'pending')) return 'pending';
+    if (reqs.some((r) => r.status === 'accepted')) return 'active';
+    if (reqs.some((r) => r.status === 'rejected')) return 'rejected';
+    return 'none';
+  };
+
+  const displayedAllSkills = useMemo(() => {
+    // start from all skills, then apply tab and status filters
+    let list = allSkills.slice();
+
+    // tab filtering: Learning -> skill_type === 'learn', Teaching -> 'teach', Mutual -> skills with a matching opposite-type skill
+    if (tab === 'Learning') {
+      list = list.filter((s) => s.skill_type === 'learn');
+    } else if (tab === 'Teaching') {
+      list = list.filter((s) => s.skill_type === 'teach');
+    } else if (tab === 'Mutual') {
+      const lookup = new Map<string, { teach: boolean; learn: boolean }[]>();
+      // find skills grouped by name (lowercased)
+      const byName = allSkills.reduce<Record<string, Skill[]>>((acc, sk) => {
+        const k = (sk.name || '').toLowerCase();
+        (acc[k] = acc[k] || []).push(sk);
+        return acc;
+      }, {});
+      list = list.filter((s) => {
+        const k = (s.name || '').toLowerCase();
+        const group = byName[k] || [];
+        return group.some((other) => other.user_id !== s.user_id && other.skill_type !== s.skill_type);
+      });
+    }
+
+    // status filtering
+    if (statusFilter.size === 0) return list;
+    return list.filter((s) => {
+      const st = getSkillStatus(s);
+      return statusFilter.has(st);
+    });
+  }, [allSkills, statusFilter, requestsBySkillId, completedSessionsBySkillId]);
+
   const toggleStatusFilter = (s: string) => {
     setStatusFilter((prev) => {
       const next = new Set(prev);
@@ -231,14 +319,65 @@ export default function ConnectionsPage() {
         .or(`and(participant_a.eq.${user.id},participant_b.eq.${otherId}),and(participant_a.eq.${otherId},participant_b.eq.${user.id})`)
         .maybeSingle();
       if (existing) {
-        router.push('/dashboard/messages');
+        router.push('/messages');
         return;
       }
       const { error } = await supabase.from('conversations').insert({ participant_a: user.id, participant_b: otherId });
       if (error) throw error;
-      router.push('/dashboard/messages');
+      router.push('/messages');
     } catch (err) {
       console.error('Failed to open conversation', err);
+    }
+  };
+
+  const sendSwapRequest = async (skill: Skill) => {
+    if (!user) return toast({ title: 'Not signed in', description: 'Please sign in to send requests.' });
+
+    setSendingRequests((s) => ({ ...s, [skill.id]: true }));
+    try {
+      const { data: reqData, error: reqErr } = await supabase.from('connection_requests').insert({
+        requester_id: user.id,
+        recipient_id: skill.user_id,
+        skill_id: skill.id,
+        status: 'pending',
+      }).select();
+
+      if (reqErr) {
+        console.error('connection_requests insert error', reqErr);
+        throw reqErr;
+      }
+
+      const requesterName = (user.user_metadata?.full_name as string) || (user.email || '').split('@')[0] || 'Someone';
+      const { data: notifData, error: notifErr } = await supabase.from('notifications').insert({
+        user_id: skill.user_id,
+        type: 'connection_request',
+        payload: {
+          requester_id: user.id,
+          requester_name: requesterName,
+          skill_id: skill.id,
+          skill_name: skill.name,
+        },
+      }).select();
+
+      if (notifErr) {
+        console.warn('notifications insert warning', notifErr);
+      }
+
+      toast({ title: 'Request sent', description: `Sent swap request to ${profilesById[skill.user_id]?.full_name || 'member'}` });
+      // Optionally update UI: mark skill as requested
+      setAllSkills((prev) => prev.map((p) => (p.id === skill.id ? { ...p } : p)));
+      return { request: reqData?.[0] ?? null, notification: notifData?.[0] ?? null };
+    } catch (e: any) {
+      const msg = e?.message || JSON.stringify(e || 'Unknown error');
+      console.error('Failed to send swap request', e);
+      toast({ title: 'Failed to send request', description: msg });
+      return { error: e };
+    } finally {
+      setSendingRequests((s) => {
+        const next = { ...s };
+        delete next[skill.id];
+        return next;
+      });
     }
   };
 
@@ -311,25 +450,29 @@ export default function ConnectionsPage() {
           <div className="mt-4 flex items-center gap-3">
             <div className="flex gap-2">
               {(['All', 'Learning', 'Teaching', 'Mutual'] as const).map((t) => (
-                <button
+                <Button
                   key={t}
                   onClick={() => setTab(t)}
-                  className={`px-3 py-1 rounded-full text-sm ${tab === t ? 'bg-skillswap-500 text-white' : 'bg-white text-skillswap-600 border border-skillswap-200'}`}
+                  size="sm"
+                  className={
+                    `px-3 py-1 rounded-full text-sm ${tab === t ? 'bg-skillswap-500 text-white' : 'bg-white text-skillswap-600 border border-skillswap-200'}`
+                  }
                 >
                   {t}
-                </button>
+                </Button>
               ))}
             </div>
 
             <div className="ml-auto flex gap-2">
               {(['Pending', 'Active', 'Completed'] as const).map((s) => (
-                <button
+                <Button
                   key={s}
                   onClick={() => toggleStatusFilter(s.toLowerCase())}
+                  size="sm"
                   className={`px-2 py-1 rounded-full text-sm ${statusFilter.has(s.toLowerCase()) ? 'bg-skillswap-500 text-white' : 'bg-white text-skillswap-600 border border-skillswap-200'}`}
                 >
                   {s}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
@@ -338,59 +481,113 @@ export default function ConnectionsPage() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
         <section className="lg:col-span-2 space-y-4">
-          {filtered.length === 0 ? (
-            <Card className="p-10 bg-white border-2 border-dashed border-skillswap-200 text-center">
-              <h2 className="text-xl font-bold text-skillswap-dark mb-2">You don’t have any connections yet.</h2>
-              <p className="text-skillswap-600 mb-6">Start exploring skills to connect with others.</p>
-              <div className="flex justify-center gap-3">
-                <Button onClick={() => router.push('/explore')} className="bg-skillswap-500 text-white">Explore Skills</Button>
-                <Button onClick={() => router.push('/dashboard#skills')} variant="outline">Add a Skill</Button>
-              </div>
-            </Card>
-          ) : (
-            <div className="space-y-3">
-              {filtered.map((c) => (
-                <Card key={c.otherId} className="p-4 bg-white rounded-lg shadow-sm flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <Avatar className="h-12 w-12">
-                      <AvatarImage src="" alt={c.profile?.full_name || 'Member'} />
-                      <AvatarFallback>{(c.profile?.full_name || 'M').slice(0,2)}</AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-semibold text-skillswap-dark">{c.profile?.full_name || 'SkillSwap member'}</h3>
-                        <Badge variant="outline">{c.status}</Badge>
-                      </div>
-                      <p className="text-sm text-skillswap-600">{c.skills.slice(0,3).map((s) => s.name).join(' • ') || 'No listed skills'}</p>
-                      <p className="text-xs text-skillswap-500 mt-1">{c.lastActivity ? `Last activity ${new Date(c.lastActivity).toLocaleString()}` : 'No recent activity'}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <Button variant="ghost" onClick={() => createOrOpenConversation(c.otherId)} title="Message">
-                      <MessageSquare />
-                    </Button>
-                    <Button variant="ghost" onClick={() => setSelected(c.otherId)} title="View profile">
-                      <Eye />
-                    </Button>
-                    <Button variant="ghost" onClick={() => router.push('/dashboard#sessions')} title="Session details">
-                      <Calendar />
-                    </Button>
-                    <div className="ml-2">
-                      {c.status === 'pending' && c.request && c.request.recipient_id === user?.id && (
-                        <div className="flex gap-2">
-                          <Button onClick={() => acceptRequest(c.request!)} className="bg-skillswap-500 text-white">Accept</Button>
-                          <Button onClick={() => rejectRequest(c.request!)} variant="outline">Reject</Button>
+          {search.trim() === '' ? (
+            // Show all posted skills before the user starts searching
+            allSkills.length === 0 ? (
+              <Card className="p-10 bg-white border-2 border-dashed border-skillswap-200 text-center">
+                <h2 className="text-xl font-bold text-skillswap-dark mb-2">No skills posted yet.</h2>
+                <p className="text-skillswap-600 mb-6">Be the first to add a skill or explore others.</p>
+                <div className="flex justify-center gap-3">
+                  <Button onClick={() => router.push('/explore')} className="bg-skillswap-500 text-white">Explore Skills</Button>
+                  <Button onClick={() => router.push('/dashboard#skills')} variant="outline">Add a Skill</Button>
+                </div>
+              </Card>
+            ) : (
+              <div className="space-y-3">
+                {displayedAllSkills.map((s) => (
+                  <Card key={s.id} className="p-4 bg-white rounded-lg shadow-sm flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <Avatar className="h-12 w-12">
+                        <AvatarImage src="" alt={s.name} />
+                        <AvatarFallback>{(profilesById[s.user_id]?.full_name || 'M').slice(0,2)}</AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold text-skillswap-dark">{s.name}</h3>
+                          <Badge variant="outline">{s.proficiency_level}</Badge>
+                          {(() => {
+                            const st = getSkillStatus(s);
+                            if (st === 'pending') return <Badge className="ml-2">Pending</Badge>;
+                            if (st === 'active') return <Badge className="ml-2">Active</Badge>;
+                            if (st === 'completed') return <Badge className="ml-2">Completed</Badge>;
+                            if (st === 'rejected') return <Badge className="ml-2">Rejected</Badge>;
+                            return null;
+                          })()}
                         </div>
-                      )}
-                      {c.status === 'completed' && (
-                        <Button variant="ghost" title="Leave review"><Star /></Button>
-                      )}
+                        <p className="text-sm text-skillswap-600">{profilesById[s.user_id]?.full_name || 'SkillSwap member'}</p>
+                        <p className="text-xs text-skillswap-500 mt-1">{s.category || s.description || ''}</p>
+                      </div>
                     </div>
-                  </div>
-                </Card>
-              ))}
-            </div>
+
+                    <div className="flex items-center gap-2">
+                      <Button variant="ghost" onClick={() => createOrOpenConversation(s.user_id)} title="Message">
+                        <MessageSquare />
+                      </Button>
+                      <Button variant="ghost" onClick={() => setSelected(s.user_id)} title="View profile">
+                        <Eye />
+                      </Button>
+                      
+                      <Button onClick={() => void sendSwapRequest(s)} disabled={Boolean(sendingRequests[s.id])} className="bg-skillswap-500 text-white">
+                        {sendingRequests[s.id] ? 'Sending...' : 'Request Swap'}
+                      </Button>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )
+          ) : (
+            filtered.length === 0 ? (
+              <Card className="p-10 bg-white border-2 border-dashed border-skillswap-200 text-center">
+                <h2 className="text-xl font-bold text-skillswap-dark mb-2">You don’t have any connections yet.</h2>
+                <p className="text-skillswap-600 mb-6">Start exploring skills to connect with others.</p>
+                <div className="flex justify-center gap-3">
+                  <Button onClick={() => router.push('/explore')} className="bg-skillswap-500 text-white">Explore Skills</Button>
+                  <Button onClick={() => router.push('/dashboard#skills')} variant="outline">Add a Skill</Button>
+                </div>
+              </Card>
+            ) : (
+              <div className="space-y-3">
+                {filtered.map((c) => (
+                  <Card key={c.otherId} className="p-4 bg-white rounded-lg shadow-sm flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <Avatar className="h-12 w-12">
+                        <AvatarImage src="" alt={c.profile?.full_name || 'Member'} />
+                        <AvatarFallback>{(c.profile?.full_name || 'M').slice(0,2)}</AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold text-skillswap-dark">{c.profile?.full_name || 'SkillSwap member'}</h3>
+                          <Badge variant="outline">{c.status}</Badge>
+                        </div>
+                        <p className="text-sm text-skillswap-600">{c.skills.slice(0,3).map((s) => s.name).join(' • ') || 'No listed skills'}</p>
+                        <p className="text-xs text-skillswap-500 mt-1">{c.lastActivity ? `Last activity ${new Date(c.lastActivity).toLocaleString()}` : 'No recent activity'}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Button variant="ghost" onClick={() => createOrOpenConversation(c.otherId)} title="Message">
+                        <MessageSquare />
+                      </Button>
+                      <Button variant="ghost" onClick={() => setSelected(c.otherId)} title="View profile">
+                        <Eye />
+                      </Button>
+                      
+                      <div className="ml-2">
+                        {c.status === 'pending' && c.request && c.request.recipient_id === user?.id && (
+                          <div className="flex gap-2">
+                            <Button onClick={() => acceptRequest(c.request!)} className="bg-skillswap-500 text-white">Accept</Button>
+                            <Button onClick={() => rejectRequest(c.request!)} variant="outline">Reject</Button>
+                          </div>
+                        )}
+                        {c.status === 'completed' && (
+                          <Button variant="ghost" title="Leave review"><Star /></Button>
+                        )}
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )
           )}
         </section>
 
@@ -422,7 +619,7 @@ export default function ConnectionsPage() {
 
               <div className="mt-4 flex gap-2">
                 <Button onClick={() => createOrOpenConversation(selected)} className="bg-skillswap-500 text-white w-full">Message</Button>
-                <Button variant="outline" onClick={() => router.push('/dashboard/public-view')}>Full profile</Button>
+                <Button variant="outline" onClick={() => router.push('/dashboard/settings')}>Full profile</Button>
               </div>
             </Card>
           ) : (
@@ -433,3 +630,5 @@ export default function ConnectionsPage() {
     </div>
   );
 }
+
+*/

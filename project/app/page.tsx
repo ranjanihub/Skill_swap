@@ -1,19 +1,49 @@
 "use client";
 
-import { useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 
-import AboutSection from '@/components/about-section';
-import HeroSection from '@/components/hero-section';
-import HowItWorks from '@/components/how-it-works';
+// simplified home feed layout to match mobile screenshot
+import { Home as HomeIcon, Users, Calendar, Bell, Briefcase, MessageSquare, Search, Compass, UserCircle } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
 import AppShell, { type ShellNavItem } from '@/components/app-shell';
-import { Compass, Home as HomeIcon, LogIn } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import {
+  isSupabaseConfigured,
+  supabase,
+  supabaseConfigError,
+  Skill,
+  UserProfile,
+  UserSettings,
+  ConnectionRequest,
+  Notification,
+} from '@/lib/supabase';
+
+type PublicProfile = Pick<UserProfile, 'id' | 'full_name' | 'bio' | 'skills_count' | 'swap_points'>;
+
+type FeedOwner = {
+  id: string;
+  profile?: PublicProfile | null;
+  settings?: Pick<UserSettings, 'avatar_url' | 'headline' | 'current_title' | 'current_company'> | null;
+  skills: Skill[];
+};
 
 export default function Home() {
-  const { session, loading } = useAuth();
+  const { user, loading: authLoading, configError } = useAuth();
   const router = useRouter();
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const [meProfile, setMeProfile] = useState<PublicProfile | null>(null);
+  const [meSettings, setMeSettings] = useState<Pick<UserSettings, 'avatar_url' | 'headline' | 'current_title' | 'current_company' | 'location'> | null>(null);
+
+  const [feed, setFeed] = useState<FeedOwner[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [requestsBySkillId, setRequestsBySkillId] = useState<Record<string, ConnectionRequest[]>>({});
+  const [sending, setSending] = useState<Record<string, boolean>>({});
+
+  const [query, setQuery] = useState('');
 
   const publicNav: ShellNavItem[] = [
     { href: '/', label: 'Home', icon: HomeIcon },
@@ -21,43 +51,337 @@ export default function Home() {
   ];
 
   useEffect(() => {
-    if (!loading && session) {
-      router.push('/dashboard');
+    if (authLoading) return;
+    if (!user) {
+      router.replace('/login');
+      return;
     }
-  }, [loading, session, router]);
+  }, [authLoading, user, router]);
 
-  if (!loading && session) return null;
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) return;
+
+    if (!isSupabaseConfigured) {
+      setError(configError || supabaseConfigError || 'Supabase is not configured');
+      setLoading(false);
+      return;
+    }
+
+    const run = async () => {
+      try {
+        setLoading(true);
+        setError('');
+
+        const [{ data: myProfile }, { data: mySettings }] = await Promise.all([
+          supabase.from('user_profiles').select('id, full_name, bio, skills_count, swap_points').eq('id', user.id).maybeSingle(),
+          supabase
+            .from('user_settings')
+            .select('id, avatar_url, headline, current_title, current_company, location')
+            .eq('id', user.id)
+            .maybeSingle(),
+        ]);
+
+        setMeProfile((myProfile || null) as any);
+        setMeSettings((mySettings || null) as any);
+
+        const { data: skillsData, error: skillsError } = await supabase
+          .from('skills')
+          .select('*')
+          .neq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(120);
+        if (skillsError) throw skillsError;
+
+        const safeSkills = (skillsData || []) as Skill[];
+        const ownerIds = Array.from(new Set(safeSkills.map((s) => s.user_id))).slice(0, 200);
+
+        const [{ data: profilesData }, { data: settingsData }, { data: reqData }, { data: notifData }] = await Promise.all([
+          ownerIds.length
+            ? supabase.from('user_profiles').select('id, full_name, bio, skills_count, swap_points').in('id', ownerIds)
+            : Promise.resolve({ data: [] as any[] } as any),
+          ownerIds.length
+            ? supabase.from('user_settings').select('id, avatar_url, headline, current_title, current_company').in('id', ownerIds)
+            : Promise.resolve({ data: [] as any[] } as any),
+          supabase.from('connection_requests').select('*').or(`requester_id.eq.${user.id},recipient_id.eq.${user.id}`),
+          supabase.from('notifications').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(8),
+        ]);
+
+        setNotifications(((notifData || []) as Notification[]) ?? []);
+
+        const profilesById: Record<string, PublicProfile> = {};
+        (profilesData || []).forEach((p: any) => {
+          profilesById[p.id] = p as PublicProfile;
+        });
+
+        const settingsById: Record<string, any> = {};
+        (settingsData || []).forEach((s: any) => {
+          settingsById[s.id] = s;
+        });
+
+        const reqs = (reqData || []) as ConnectionRequest[];
+        const reqsBySkill: Record<string, ConnectionRequest[]> = {};
+        reqs.forEach((r) => {
+          if (!r.skill_id) return;
+          reqsBySkill[r.skill_id] = reqsBySkill[r.skill_id] || [];
+          reqsBySkill[r.skill_id].push(r);
+        });
+        setRequestsBySkillId(reqsBySkill);
+
+        const skillsByOwner: Record<string, Skill[]> = {};
+        safeSkills.forEach((s) => {
+          skillsByOwner[s.user_id] = skillsByOwner[s.user_id] || [];
+          skillsByOwner[s.user_id].push(s);
+        });
+
+        const owners: FeedOwner[] = ownerIds.map((id) => ({
+          id,
+          profile: profilesById[id] || null,
+          settings: settingsById[id] || null,
+          skills: (skillsByOwner[id] || []).slice(0, 3),
+        }));
+
+        setFeed(owners);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Failed to load home feed';
+        setError(msg);
+        console.error('Home feed error:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void run();
+  }, [authLoading, user, configError]);
+
+  const filteredFeed = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return feed;
+    return feed.filter((o) => {
+      const name = (o.profile?.full_name || '').toLowerCase();
+      const headline = (o.settings?.headline || '').toLowerCase();
+      if (name.includes(q) || headline.includes(q)) return true;
+      return o.skills.some((s) => s.name.toLowerCase().includes(q));
+    });
+  }, [feed, query]);
+
+  const sendSwapRequest = async (ownerId: string, skillId?: string) => {
+    if (!user) return;
+    const key = skillId || ownerId;
+
+    // prevent duplicates
+    const existing = (requestsBySkillId[skillId || ''] || []).some((r) =>
+      r.requester_id === user.id && r.recipient_id === ownerId && r.status === 'pending'
+    );
+    if (skillId && existing) return;
+
+    try {
+      setSending((prev) => ({ ...prev, [key]: true }));
+      const { data, error: insertError } = await supabase
+        .from('connection_requests')
+        .insert({ requester_id: user.id, recipient_id: ownerId, skill_id: skillId || null, status: 'pending' })
+        .select('*')
+        .maybeSingle();
+      if (insertError) throw insertError;
+      if (data?.skill_id) {
+        setRequestsBySkillId((prev) => ({
+          ...prev,
+          [data.skill_id as string]: [...(prev[data.skill_id as string] || []), data as any],
+        }));
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to send request';
+      setError(msg);
+    } finally {
+      setSending((prev) => ({ ...prev, [key]: false }));
+    }
+  };
 
   return (
     <AppShell
+      showSidebar={false}
       nav={publicNav}
-      bottomActions={
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={() => router.push('/login')}
-          className="text-skillswap-600 hover:bg-skillswap-50"
-          aria-label="Login"
-          title="Login"
-        >
-          <LogIn className="h-5 w-5" />
-        </Button>
-      }
+      bottomNav={[
+        { href: '/', label: 'Home', icon: HomeIcon },
+        { href: '/network', label: 'My Network', icon: Users },
+        { href: '/calendar', label: 'Calender', icon: Calendar },
+        { href: '/notifications', label: 'Notification', icon: Bell },
+        { href: '/dashboard/settings', label: 'Profile', icon: UserCircle },
+      ]}
       headerLeft={
-        <>
-          <p className="text-sm sm:text-base font-semibold text-skillswap-dark truncate">
-            Welcome to SkillSwap
-          </p>
-          <p className="text-xs text-skillswap-600 truncate">Exchange skills through focused sessions</p>
-        </>
+        <div className="w-full flex items-center gap-3">
+          <div className="w-9 h-9 rounded-full overflow-hidden flex-shrink-0">
+            <Image src="/SkillSwap_Logo.jpg" alt="SkillSwap" width={36} height={36} className="object-cover" />
+          </div>
+          <div className="flex-1">
+            <div className="relative">
+              <input
+                aria-label="Search swaps"
+                placeholder="Search Swaps"
+                className="mobile-header-search pl-10 w-full"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+              <Search className="absolute left-3 top-2.5 h-5 w-5 text-skillswap-400" />
+            </div>
+          </div>
+          <button
+            aria-label="Messages"
+            title="Messages"
+            onClick={() => router.push('/messages')}
+            className="w-9 h-9 rounded-full bg-white flex items-center justify-center shadow-sm"
+          >
+            <MessageSquare className="h-5 w-5 text-skillswap-600" />
+          </button>
+        </div>
       }
     >
-      <main className="w-full">
-        <HeroSection />
-        <AboutSection />
-        <HowItWorks />
-      </main>
+      <div className="w-full max-w-[1200px] mx-auto lg:grid lg:grid-cols-[280px_1fr_320px] lg:gap-6">
+        {/* Left column - profile (desktop only) */}
+        <aside className="hidden lg:block">
+          <div className="feed-card">
+            <div className="flex items-center gap-3">
+              <div className="w-16 h-16 rounded-full bg-skillswap-500 ring-2 ring-white" />
+              <div>
+                <h2 className="text-lg font-semibold text-skillswap-800">{meProfile?.full_name || 'SkillSwap member'}</h2>
+                <p className="text-sm text-skillswap-600">
+                  {meSettings?.headline ||
+                    (meSettings?.current_title
+                      ? `${meSettings.current_title}${meSettings.current_company ? ` — ${meSettings.current_company}` : ''}`
+                      : 'Complete your profile to get better matches')}
+                </p>
+                {meSettings?.location && <p className="mt-2 text-xs text-skillswap-500">{meSettings.location}</p>}
+              </div>
+            </div>
+            <div className="mt-4">
+              <div className="bg-skillswap-100 rounded-md p-3 text-sm">Achieve your career goals with Premium — Try for ₹0</div>
+            </div>
+            <div className="mt-4">
+              <div className="flex justify-between text-sm text-skillswap-600">
+                <div>Profile viewers</div>
+                <div className="font-semibold text-skillswap-800">{meProfile?.skills_count ?? 0}</div>
+              </div>
+              <div className="flex justify-between mt-2 text-sm text-skillswap-600">
+                <div>Post impressions</div>
+                <div className="font-semibold text-skillswap-800">{meProfile?.swap_points ?? 0}</div>
+              </div>
+            </div>
+            <div className="mt-4 border-t border-skillswap-200 pt-3 space-y-2 text-sm">
+              <div className="flex items-center gap-2"><span className="w-3 h-3 bg-skillswap-300 rounded-sm" />Saved items</div>
+              <div className="flex items-center gap-2"><span className="w-3 h-3 bg-skillswap-300 rounded-sm" />Groups</div>
+              <div className="flex items-center gap-2"><span className="w-3 h-3 bg-skillswap-300 rounded-sm" />Newsletters</div>
+              <div className="flex items-center gap-2"><span className="w-3 h-3 bg-skillswap-300 rounded-sm" />Events</div>
+            </div>
+          </div>
+        </aside>
+
+        {/* Center feed */}
+        <section className="space-y-6">
+          {/* Post composer (desktop) */}
+          <div className="feed-card">
+            <div className="flex items-start gap-3">
+              <div className="w-12 h-12 rounded-full bg-skillswap-500" />
+              <div className="flex-1">
+                <input className="mobile-header-search w-full" placeholder="Start a post" />
+                <div className="mt-3 flex items-center gap-6 text-sm text-skillswap-600">
+                  <div className="flex items-center gap-2"><span className="w-4 h-4 bg-green-500 rounded-sm" />Video</div>
+                  <div className="flex items-center gap-2"><span className="w-4 h-4 bg-blue-400 rounded-sm" />Photo</div>
+                  <div className="flex items-center gap-2"><span className="w-4 h-4 bg-orange-400 rounded-sm" />Write article</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {error && (
+            <div className="feed-card border-destructive/30 bg-destructive/10">
+              <p className="text-sm text-destructive">{error}</p>
+            </div>
+          )}
+
+          {loading ? (
+            <div className="feed-card">
+              <div className="w-10 h-10 border-4 border-skillswap-200 border-t-skillswap-500 rounded-full animate-spin" />
+            </div>
+          ) : (
+            filteredFeed.map((owner) => {
+              const primarySkill = owner.skills[0];
+              const pending = primarySkill?.id ? (requestsBySkillId[primarySkill.id] || []).some((r) => r.requester_id === user?.id && r.recipient_id === owner.id && r.status === 'pending') : false;
+              const isSending = Boolean(sending[primarySkill?.id || owner.id]);
+
+              return (
+                <article key={owner.id} className="feed-card">
+                  <div className="flex items-start gap-3">
+                    <div className="w-12 h-12 rounded-full bg-skillswap-500" />
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-skillswap-800">
+                        {owner.profile?.full_name || 'SkillSwap member'}
+                      </h3>
+                      <p className="text-sm text-skillswap-600">
+                        {owner.settings?.headline ||
+                          (owner.settings?.current_title
+                            ? `${owner.settings.current_title}${owner.settings.current_company ? ` — ${owner.settings.current_company}` : ''}`
+                            : owner.profile?.bio || 'SkillSwap member')}
+                      </p>
+
+                      {owner.skills.length > 0 && (
+                        <div className="mt-3 text-sm text-skillswap-700">
+                          <p className="font-medium text-skillswap-800">Skills</p>
+                          <ul className="mt-1 space-y-1">
+                            {owner.skills.map((s) => (
+                              <li key={s.id} className="flex items-center justify-between gap-3">
+                                <span className="truncate">{s.skill_type === 'teach' ? 'Teaches' : 'Learns'}: {s.name}</span>
+                                <span className="text-xs text-skillswap-500 flex-shrink-0">{s.proficiency_level}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      <div className="mt-4 flex gap-3">
+                        <button
+                          className="btn-outline-rounded"
+                          onClick={() => router.push(`/profile/${owner.id}`)}
+                        >
+                          View Profile
+                        </button>
+                        <button
+                          className="btn-primary-rounded"
+                          disabled={!primarySkill?.id || pending || isSending}
+                          onClick={() => primarySkill?.id && sendSwapRequest(owner.id, primarySkill.id)}
+                        >
+                          {pending ? 'Request Sent' : isSending ? 'Sending...' : 'Request to Swap'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              );
+            })
+          )}
+        </section>
+
+        {/* Right column - news (desktop only) */}
+        <aside className="hidden lg:block">
+          <div className="feed-card">
+            <h3 className="text-lg font-semibold text-skillswap-800">Notifications</h3>
+            <p className="text-sm text-skillswap-600 mt-2">Recent</p>
+            {notifications.length === 0 ? (
+              <p className="mt-3 text-sm text-skillswap-500">No notifications yet.</p>
+            ) : (
+              <ul className="mt-3 space-y-3">
+                {notifications.map((n) => (
+                  <li key={n.id} className="text-sm">
+                    <div className="font-medium text-skillswap-800">{n.type}</div>
+                    <div className="text-xs text-skillswap-500 mt-1">
+                      {n.read ? 'Read' : 'Unread'}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </aside>
+      </div>
     </AppShell>
   );
 }

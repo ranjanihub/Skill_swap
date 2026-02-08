@@ -15,7 +15,7 @@ interface AuthContextType {
     fullName: string,
     role: string
   ) => Promise<{ signedIn: boolean }>;
-  signIn: (email: string, password: string) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<any>;
   signOut: () => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   resendSignupConfirmation: (email: string) => Promise<void>;
@@ -100,11 +100,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error(supabaseConfigError ?? 'Supabase is not configured');
     }
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
     if (error) throw error;
+    return data;
   };
 
   const signOut = async () => {

@@ -34,7 +34,7 @@ export default function AuthCallbackPage() {
         }
       }
 
-      router.replace('/dashboard');
+      router.replace('/');
     };
 
     void run();
