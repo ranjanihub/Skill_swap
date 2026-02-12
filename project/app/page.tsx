@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 import { Home as HomeIcon, Users, Calendar, Bell, Briefcase, MessageSquare, Search, Compass, UserCircle } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
 import AppShell, { type ShellNavItem } from '@/components/app-shell';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import {
   isSupabaseConfigured,
   supabase,
@@ -240,22 +241,22 @@ export default function Home() {
         {/* Left column - profile (desktop only) */}
         <aside className="hidden lg:block">
           <div className="feed-card">
-            <div className="flex items-center gap-3">
-              <div className="w-16 h-16 rounded-full bg-skillswap-500 ring-2 ring-white" />
-              <div>
-                <h2 className="text-lg font-semibold text-skillswap-800">{meProfile?.full_name || 'SkillSwap member'}</h2>
-                <p className="text-sm text-skillswap-600">
-                  {meSettings?.headline ||
-                    (meSettings?.current_title
-                      ? `${meSettings.current_title}${meSettings.current_company ? ` — ${meSettings.current_company}` : ''}`
-                      : 'Complete your profile to get better matches')}
-                </p>
-                {meSettings?.location && <p className="mt-2 text-xs text-skillswap-500">{meSettings.location}</p>}
+              <div className="flex items-center gap-3">
+                <div className="w-16 h-16 rounded-full overflow-hidden">
+                  <Avatar className="h-16 w-16">
+                    <AvatarImage src={meSettings?.avatar_url || (user?.user_metadata?.avatar_url as string | undefined) || ''} alt={meProfile?.full_name || 'Member'} />
+                    <AvatarFallback>{(meProfile?.full_name || user?.user_metadata?.full_name || 'S').slice(0, 1)}</AvatarFallback>
+                  </Avatar>
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-skillswap-800">{meProfile?.full_name || (user?.user_metadata?.full_name as string) || 'SkillSwap member'}</h2>
+                  <p className="text-sm text-skillswap-600">
+                    {meSettings?.headline || meSettings?.current_title || (user?.user_metadata?.role as string) || 'Complete your profile to get better matches'}
+                  </p>
+                  {meSettings?.location && <p className="mt-2 text-xs text-skillswap-500">{meSettings.location}</p>}
+                </div>
               </div>
-            </div>
-            <div className="mt-4">
-              <div className="bg-skillswap-100 rounded-md p-3 text-sm">Achieve your career goals with Premium — Try for ₹0</div>
-            </div>
+            
             <div className="mt-4">
               <div className="flex justify-between text-sm text-skillswap-600">
                 <div>Profile viewers</div>
@@ -284,13 +285,15 @@ export default function Home() {
               <div className="flex-1">
                 <input className="mobile-header-search w-full" placeholder="Start a post" />
                 <div className="mt-3 flex items-center gap-6 text-sm text-skillswap-600">
-                  <div className="flex items-center gap-2"><span className="w-4 h-4 bg-green-500 rounded-sm" />Video</div>
-                  <div className="flex items-center gap-2"><span className="w-4 h-4 bg-blue-400 rounded-sm" />Photo</div>
+                  <div className="flex items-center gap-2"><span className="w-4 h-4 bg-green-500 rounded-sm" />Test</div>
+                  <div className="flex items-center gap-2"><span className="w-4 h-4 bg-blue-400 rounded-sm" />Skill sample</div>
                   <div className="flex items-center gap-2"><span className="w-4 h-4 bg-orange-400 rounded-sm" />Write article</div>
                 </div>
               </div>
             </div>
           </div>
+
+          
 
           {error && (
             <div className="feed-card border-destructive/30 bg-destructive/10">
@@ -303,60 +306,55 @@ export default function Home() {
               <div className="w-10 h-10 border-4 border-skillswap-200 border-t-skillswap-500 rounded-full animate-spin" />
             </div>
           ) : (
-            filteredFeed.map((owner) => {
-              const primarySkill = owner.skills[0];
-              const pending = primarySkill?.id ? (requestsBySkillId[primarySkill.id] || []).some((r) => r.requester_id === user?.id && r.recipient_id === owner.id && r.status === 'pending') : false;
-              const isSending = Boolean(sending[primarySkill?.id || owner.id]);
+            (() => {
+              const postedSwaps = filteredFeed.flatMap((owner) =>
+                owner.skills.map((skill) => ({ owner, skill }))
+              ).sort((a, b) => {
+                const aTs = a.skill.created_at ? new Date(a.skill.created_at).getTime() : 0;
+                const bTs = b.skill.created_at ? new Date(b.skill.created_at).getTime() : 0;
+                return bTs - aTs;
+              });
 
-              return (
-                <article key={owner.id} className="feed-card">
-                  <div className="flex items-start gap-3">
-                    <div className="w-12 h-12 rounded-full bg-skillswap-500" />
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-skillswap-800">
-                        {owner.profile?.full_name || 'SkillSwap member'}
-                      </h3>
-                      <p className="text-sm text-skillswap-600">
-                        {owner.settings?.headline ||
-                          (owner.settings?.current_title
-                            ? `${owner.settings.current_title}${owner.settings.current_company ? ` — ${owner.settings.current_company}` : ''}`
-                            : owner.profile?.bio || 'SkillSwap member')}
-                      </p>
+              return postedSwaps.map(({ owner, skill }) => {
+                const pending = skill.id ? (requestsBySkillId[skill.id] || []).some((r) => r.requester_id === user?.id && r.recipient_id === owner.id && r.status === 'pending') : false;
+                const isSending = Boolean(sending[skill.id || owner.id]);
 
-                      {owner.skills.length > 0 && (
+                return (
+                  <article key={skill.id} className="feed-card">
+                    <div className="flex items-start gap-3">
+                      <div className="w-12 h-12 rounded-full bg-skillswap-500" />
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-skillswap-800">{owner.profile?.full_name || 'SkillSwap member'}</h3>
+                        <p className="text-sm text-skillswap-600">
+                          {owner.settings?.headline || owner.profile?.bio || 'SkillSwap member'}
+                        </p>
+
                         <div className="mt-3 text-sm text-skillswap-700">
                           <p className="font-medium text-skillswap-800">Skills</p>
                           <ul className="mt-1 space-y-1">
-                            {owner.skills.map((s) => (
-                              <li key={s.id} className="flex items-center justify-between gap-3">
-                                <span className="truncate">{s.skill_type === 'teach' ? 'Teaches' : 'Learns'}: {s.name}</span>
-                                <span className="text-xs text-skillswap-500 flex-shrink-0">{s.proficiency_level}</span>
-                              </li>
-                            ))}
+                            <li className="flex items-center justify-between gap-3">
+                              <span className="truncate">{skill.skill_type === 'teach' ? 'Teaches' : 'Learns'}: {skill.name}</span>
+                              <span className="text-xs text-skillswap-500 flex-shrink-0">{skill.proficiency_level}</span>
+                            </li>
                           </ul>
                         </div>
-                      )}
 
-                      <div className="mt-4 flex gap-3">
-                        <button
-                          className="btn-outline-rounded"
-                          onClick={() => router.push(`/profile/${owner.id}`)}
-                        >
-                          View Profile
-                        </button>
-                        <button
-                          className="btn-primary-rounded"
-                          disabled={!primarySkill?.id || pending || isSending}
-                          onClick={() => primarySkill?.id && sendSwapRequest(owner.id, primarySkill.id)}
-                        >
-                          {pending ? 'Request Sent' : isSending ? 'Sending...' : 'Request to Swap'}
-                        </button>
+                        <div className="mt-4 flex gap-3">
+                          <button className="btn-outline-rounded" onClick={() => router.push(`/profile/${owner.id}`)}>View Profile</button>
+                          <button
+                            className="btn-primary-rounded"
+                            disabled={!skill?.id || pending || isSending}
+                            onClick={() => skill?.id && sendSwapRequest(owner.id, skill.id)}
+                          >
+                            {pending ? 'Request Sent' : isSending ? 'Sending...' : 'Request to Swap'}
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </article>
-              );
-            })
+                  </article>
+                );
+              });
+            })()
           )}
         </section>
 

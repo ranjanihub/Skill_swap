@@ -601,21 +601,17 @@ export default function SettingsPage() {
                   setUploadingAvatar(true);
                   setError('');
                   try {
-                    const path = `${AVATAR_BUCKET}/${user.id}/${Date.now()}_${file.name}`;
-                    const { error: uploadError } = await supabase.storage.from(AVATAR_BUCKET).upload(path, file, { upsert: true });
-                    if (uploadError) {
-                      // Handle common missing-bucket case with actionable guidance
-                      const msg = (uploadError.message || String(uploadError)).toLowerCase();
-                      if (msg.includes('bucket') || msg.includes('does not exist') || msg.includes('not found')) {
-                        setError(
-                          `Storage bucket "${AVATAR_BUCKET}" not found. Create a bucket named "${AVATAR_BUCKET}" in your Supabase project (Storage → Buckets), make it public or configure appropriate policies, then reload this page.`
-                        );
-                        return;
-                      }
-                      throw uploadError;
-                    }
+                    const form = new FormData();
+                    form.append('file', file);
+                    form.append('user_id', user.id);
+                    form.append('bucket', AVATAR_BUCKET);
 
-                    const publicUrl = supabase.storage.from(AVATAR_BUCKET).getPublicUrl(path).data?.publicUrl;
+                    const res = await fetch('/api/upload-avatar', { method: 'POST', body: form });
+                    const json = await res.json();
+                    if (!res.ok) {
+                      throw new Error(json?.error || 'Upload failed');
+                    }
+                    const publicUrl = json?.publicUrl;
                     if (!publicUrl) throw new Error('Failed to get public URL for avatar');
                     updateSetting({ avatar_url: publicUrl });
                     setSuccess('Avatar uploaded (remember to click Save)');

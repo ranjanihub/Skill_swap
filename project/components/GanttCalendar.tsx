@@ -27,7 +27,19 @@ export default function GanttCalendar({
   const startDate = viewStart ? new Date(viewStart) : new Date();
   startDate.setHours(0, 0, 0, 0);
 
-  const columnWidth = 48; // px per day
+  const [columnWidth, setColumnWidth] = React.useState<number>(48); // px per day (responsive)
+
+  React.useEffect(() => {
+    function updateColumnWidth() {
+      const w = window.innerWidth;
+      if (w < 640) setColumnWidth(32);
+      else if (w < 1024) setColumnWidth(40);
+      else setColumnWidth(48);
+    }
+    updateColumnWidth();
+    window.addEventListener('resize', updateColumnWidth);
+    return () => window.removeEventListener('resize', updateColumnWidth);
+  }, []);
   const days: Date[] = Array.from({ length: viewDays }).map((_, i) => {
     const d = new Date(startDate);
     d.setDate(startDate.getDate() + i);
@@ -78,7 +90,7 @@ export default function GanttCalendar({
 
             return (
               <div key={t.id} className="relative h-16 border-b border-skillswap-100">
-                <div className="absolute inset-y-0 left-0 flex" style={{ marginLeft: 0 }}>
+                <div className="absolute inset-y-0 left-0 flex ml-0">
                   <div className="flex" style={{ width: columnWidth * viewDays }} />
                 </div>
 
@@ -101,7 +113,7 @@ export default function GanttCalendar({
           })}
         </div>
 
-        <div style={{ height: 24 }} />
+        <div className="h-6" />
       </div>
     </div>
   );

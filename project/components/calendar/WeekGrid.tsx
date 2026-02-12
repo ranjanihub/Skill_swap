@@ -41,7 +41,7 @@ export default function WeekGrid({ sessions, onSelect }: Props) {
       </div>
 
       <div className="overflow-x-auto">
-        <div className="grid grid-cols-7 gap-3 min-w-[980px]">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
           {days.map((d, idx) => (
             <div key={d.toDateString()} className="bg-white rounded-lg p-3 min-h-[140px]">
             <div className="flex items-center justify-between mb-2">

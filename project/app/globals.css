@@ -39,6 +39,9 @@
 }
 
 @layer base {
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
   * {
     @apply border-border;
   }
@@ -48,6 +51,15 @@
   }
   html {
     scroll-behavior: smooth;
+  }
+}
+
+/* Make media elements responsive */
+@layer base {
+  img, picture, video, svg {
+    max-width: 100%;
+    height: auto;
+    display: block;
   }
 }
 

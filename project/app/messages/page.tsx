@@ -18,6 +18,12 @@ import {
   Compass,
   UserCircle,
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from '@/components/ui/dropdown-menu';
 
 import { useAuth } from '@/context/auth-context';
 import {
@@ -40,28 +46,47 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 type ConvWithMeta = Conversation & {
   other?: Pick<UserProfile, 'id' | 'full_name'>;
   lastMessage?: Message | null;
+  avatar_url?: string | null;
+  isAcceptedConnection?: boolean;
 };
 
-const DESKTOP_TABS = ['Focused', 'Jobs', 'Unread', 'Connections', 'InMail', 'Starred'] as const;
+const DESKTOP_TABS = ['Read', 'Unread', 'Starred'] as const;
 
 export default function MessagesPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
 
   const [conversations, setConversations] = useState<ConvWithMeta[]>([]);
+  const [settingsById, setSettingsById] = useState<Record<string, { avatar_url?: string | null }>>({});
   const [activeConv, setActiveConv] = useState<ConvWithMeta | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const [activeTab, setActiveTab] = useState<(typeof DESKTOP_TABS)[number]>('Focused');
+  const [activeTab, setActiveTab] = useState<(typeof DESKTOP_TABS)[number]>('Unread');
   const [searchConvs, setSearchConvs] = useState('');
+  const [starredMap, setStarredMap] = useState<Record<string, boolean>>({});
+  const [muted, setMuted] = useState<boolean>(false);
   const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
+    // load starred conversations from localStorage
+    try {
+      const raw = localStorage.getItem('starred_conversations');
+      if (raw) setStarredMap(JSON.parse(raw));
+    } catch (e) {
+      // ignore
+    }
+    try {
+      const m = localStorage.getItem('messages_muted');
+      if (m) setMuted(m === '1');
+    } catch (e) {
+      // ignore
+    }
+
     if (authLoading) return;
     if (!user) {
       router.replace('/login');
@@ -97,6 +122,30 @@ export default function MessagesPage() {
         const byId: Record<string, Pick<UserProfile, 'id' | 'full_name'>> = {};
         (profiles || []).forEach((p: any) => (byId[p.id] = p));
 
+        // fetch avatars from user_settings
+        const { data: settingsData } = await supabase
+          .from('user_settings')
+          .select('id, avatar_url')
+          .in('id', otherIds.slice(0, 200));
+        const settingsMap: Record<string, { avatar_url?: string | null }> = {};
+        (settingsData || []).forEach((s: any) => (settingsMap[s.id] = { avatar_url: s.avatar_url }));
+        setSettingsById(settingsMap);
+
+        // fetch connection_requests for these participants to determine accepted status
+        const userAndOthers = [user.id, ...otherIds].slice(0, 500);
+        const { data: connReqs } = await supabase
+          .from('connection_requests')
+          .select('requester_id,recipient_id,status')
+          .in('requester_id', userAndOthers)
+          .in('recipient_id', userAndOthers);
+        const acceptedSet = new Set<string>();
+        (connReqs || []).forEach((r: any) => {
+          if (r.status === 'accepted') {
+            acceptedSet.add(`${r.requester_id}:${r.recipient_id}`);
+            acceptedSet.add(`${r.recipient_id}:${r.requester_id}`);
+          }
+        });
+
         const convIds = rows.map((r) => r.id);
         const { data: messagesData, error: lastErr } = await supabase
           .from('messages')
@@ -115,6 +164,9 @@ export default function MessagesPage() {
           ...r,
           other: byId[r.participant_a === user.id ? r.participant_b : r.participant_a],
           lastMessage: lastByConv[r.id] ?? null,
+          avatar_url: settingsMap[r.participant_a === user.id ? r.participant_b : r.participant_a]?.avatar_url ?? null,
+          isAcceptedConnection:
+            acceptedSet.has(`${user.id}:${r.participant_a === user.id ? r.participant_b : r.participant_a}`) ?? false,
         }));
 
         setConversations(enriched);
@@ -134,6 +186,19 @@ export default function MessagesPage() {
 
     void run();
   }, [authLoading, user, router]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('starred_conversations', JSON.stringify(starredMap));
+    } catch (e) {
+      // ignore
+    }
+    try {
+      localStorage.setItem('messages_muted', muted ? '1' : '0');
+    } catch (e) {
+      // ignore
+    }
+  }, [starredMap, muted]);
 
   useEffect(() => {
     if (!activeConv || !user) return;
@@ -161,15 +226,82 @@ export default function MessagesPage() {
     };
   }, [activeConv, user]);
 
+  // Real-time subscriptions: conversations and messages
+  useEffect(() => {
+    if (!user) return;
+
+    const convChannel = supabase
+      .channel('public:conversations')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'conversations' }, (payload) => {
+        const row = payload.new as Conversation;
+        const otherId = row.participant_a === user.id ? row.participant_b : row.participant_a;
+        // fetch profile for other
+        void (async () => {
+          try {
+            const { data: profile } = await supabase.from('user_profiles').select('id, full_name').eq('id', otherId).maybeSingle();
+            const { data: settings } = await supabase.from('user_settings').select('id, avatar_url').eq('id', otherId).maybeSingle();
+            // determine if this pair has an accepted connection
+            const { data: reqs } = await supabase
+              .from('connection_requests')
+              .select('requester_id,recipient_id,status')
+              .in('requester_id', [user.id, otherId])
+              .in('recipient_id', [user.id, otherId]);
+            let isAccepted = false;
+            (reqs || []).forEach((r: any) => {
+              if (r.status === 'accepted') isAccepted = true;
+            });
+            setConversations((prev) => [{ ...row, other: profile ?? { id: otherId, full_name: 'Member' }, lastMessage: null, avatar_url: settings?.avatar_url ?? null, isAcceptedConnection: isAccepted }, ...prev]);
+          } catch (e) {
+            console.error('Realtime conv fetch failed', e);
+          }
+        })();
+      })
+      .subscribe();
+
+    const msgChannel = supabase
+      .channel('public:messages')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
+        const m = payload.new as Message;
+        // if the message belongs to current active conversation, append it
+        if (activeConv && m.conversation_id === activeConv.id) {
+          setMessages((prev) => [...prev, m]);
+          setTimeout(() => scrollRef.current?.scrollTo({ top: scrollRef.current?.scrollHeight ?? 0, behavior: 'smooth' }), 50);
+        }
+        // update lastMessage for the conversation in list
+        setConversations((prev) => prev.map((c) => (c.id === m.conversation_id ? { ...c, lastMessage: m } : c)));
+      })
+      .subscribe();
+
+    return () => {
+      try {
+        supabase.removeChannel(convChannel);
+        supabase.removeChannel(msgChannel);
+      } catch (e) {
+        // ignore
+      }
+    };
+  }, [user, activeConv]);
+
   const filteredConversations = useMemo(() => {
     const q = searchConvs.trim().toLowerCase();
-    if (!q) return conversations;
-    return conversations.filter((c) => {
+    let list = conversations.slice();
+
+    // apply tab filters
+    if (activeTab === 'Unread') {
+      list = list.filter((c) => c.lastMessage && c.lastMessage.sender_id !== user?.id);
+    } else if (activeTab === 'Read') {
+      list = list.filter((c) => !c.lastMessage || c.lastMessage.sender_id === user?.id);
+    } else if (activeTab === 'Starred') {
+      list = list.filter((c) => !!starredMap[c.id]);
+    }
+
+    if (!q) return list;
+    return list.filter((c) => {
       const name = (c.other?.full_name || '').toLowerCase();
       const last = (c.lastMessage?.body || '').toLowerCase();
       return name.includes(q) || last.includes(q);
     });
-  }, [conversations, searchConvs]);
+  }, [conversations, searchConvs, activeTab, starredMap, user]);
 
   const selectConversation = (c: ConvWithMeta) => {
     setActiveConv(c);
@@ -178,20 +310,32 @@ export default function MessagesPage() {
 
   const sendMessage = async () => {
     if (!activeConv || !user || !text.trim()) return;
+    if (!activeConv.isAcceptedConnection) {
+      setError('You can only send messages to accepted connections.');
+      return;
+    }
 
     try {
-      const { data, error: insertError } = await supabase
-        .from('messages')
-        .insert({ conversation_id: activeConv.id, sender_id: user.id, body: text.trim() })
-        .select('*')
-        .single();
-      if (insertError) throw insertError;
+      const res = await fetch('/api/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversation_id: activeConv.id, sender_id: user.id, body: text.trim() }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setError(json?.error || 'Failed to send message');
+        return;
+      }
 
-      setMessages((prev) => [...prev, data as Message]);
-      setText('');
-      setTimeout(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' }), 50);
+      const data = json?.message;
+      if (data) {
+        setMessages((prev) => [...prev, data as Message]);
+        setText('');
+        setTimeout(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' }), 50);
+      }
     } catch (err) {
       console.error('Failed to send message', err);
+      setError('Failed to send message');
     }
   };
 
@@ -261,9 +405,45 @@ export default function MessagesPage() {
               <div className="p-3 border-b border-skillswap-200 flex items-center justify-between">
                 <h2 className="font-semibold text-skillswap-800">Messaging</h2>
                 <div className="flex items-center gap-2">
-                  <button className="h-9 w-9 rounded-full hover:bg-skillswap-100 flex items-center justify-center" aria-label="More">
-                    <MoreHorizontal className="h-5 w-5 text-skillswap-600" />
-                  </button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="h-9 w-9 rounded-full hover:bg-skillswap-100 flex items-center justify-center" aria-label="More">
+                        <MoreHorizontal className="h-5 w-5 text-skillswap-600" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          const ok = confirm('Clear all conversations locally? This will not delete server data. Continue?');
+                          if (!ok) return;
+                          setConversations([]);
+                          setMessages([]);
+                          setActiveConv(null);
+                          setStarredMap({});
+                          try {
+                            localStorage.removeItem('starred_conversations');
+                          } catch (e) {}
+                        }}
+                      >
+                        Clear all chat
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setMuted((m) => {
+                            const next = !m;
+                            try {
+                              localStorage.setItem('messages_muted', next ? '1' : '0');
+                            } catch (e) {}
+                            alert(next ? 'Chat muted' : 'Chat unmuted');
+                            return next;
+                          });
+                        }}
+                      >
+                        {muted ? 'Unmute chat' : 'Mute chat'}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
                   <button className="h-9 w-9 rounded-full hover:bg-skillswap-100 flex items-center justify-center" aria-label="Compose">
                     <Pencil className="h-5 w-5 text-skillswap-600" />
                   </button>
@@ -301,7 +481,7 @@ export default function MessagesPage() {
               </div>
 
               <div className="max-h-[calc(100vh-220px)] overflow-y-auto">
-                {filteredConversations.length === 0 ? (
+                  {filteredConversations.length === 0 ? (
                   <div className="p-6 text-center">
                     <p className="font-medium text-skillswap-800">No conversations yet</p>
                     <p className="text-sm text-skillswap-600 mt-2">Explore skills to start a conversation.</p>
@@ -314,14 +494,13 @@ export default function MessagesPage() {
                     const isActive = activeConv?.id === c.id;
                     const last = c.lastMessage;
                     return (
-                      <button
+                      <div
                         key={c.id}
-                        type="button"
-                        onClick={() => selectConversation(c)}
                         className={cn(
                           'w-full text-left px-3 py-3 border-b border-skillswap-100 hover:bg-skillswap-100/60 flex items-start gap-3',
                           isActive && 'bg-skillswap-100/60 border-l-4 border-emerald-700 pl-2'
                         )}
+                        onClick={() => selectConversation(c)}
                       >
                         <Avatar className="h-12 w-12">
                           <AvatarImage src={''} alt={c.other?.full_name ?? 'Member'} />
@@ -340,7 +519,22 @@ export default function MessagesPage() {
                             {last?.body || 'SkillSwap conversation'}
                           </p>
                         </div>
-                      </button>
+
+                        <div className="ml-2 flex-shrink-0 self-start">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setStarredMap((s) => ({ ...s, [c.id]: !s[c.id] }));
+                            }}
+                            aria-label={starredMap[c.id] ? 'Unstar' : 'Star'}
+                            title={starredMap[c.id] ? 'Unstar' : 'Star'}
+                            className="h-8 w-8 rounded-full hover:bg-skillswap-100 flex items-center justify-center"
+                          >
+                            <Star className={cn('h-4 w-4', starredMap[c.id] ? 'text-amber-500' : 'text-skillswap-600')} />
+                          </button>
+                        </div>
+                      </div>
                     );
                   })
                 )}
@@ -372,17 +566,47 @@ export default function MessagesPage() {
 
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-sm text-skillswap-800 truncate">
-                        {activeConv.other?.full_name ?? 'Member'}
-                      </p>
-                      <p className="text-xs text-skillswap-500 truncate">Sponsored</p>
+                          {activeConv.other?.full_name ?? 'Member'}
+                        </p>
                     </div>
 
                     <button className="h-9 w-9 rounded-full hover:bg-skillswap-100 flex items-center justify-center" aria-label="Star">
                       <Star className="h-5 w-5 text-skillswap-600" />
                     </button>
-                    <button className="h-9 w-9 rounded-full hover:bg-skillswap-100 flex items-center justify-center" aria-label="More">
-                      <MoreHorizontal className="h-5 w-5 text-skillswap-600" />
-                    </button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="h-9 w-9 rounded-full hover:bg-skillswap-100 flex items-center justify-center" aria-label="More">
+                          <MoreHorizontal className="h-5 w-5 text-skillswap-600" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            if (!activeConv) return;
+                            const ok = confirm('Clear messages for this conversation locally? This will not delete server data. Continue?');
+                            if (!ok) return;
+                            setMessages([]);
+                            setConversations((prev) => prev.map((c) => (c.id === activeConv.id ? { ...c, lastMessage: null } : c)));
+                          }}
+                        >
+                          Clear conversation
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setMuted((m) => {
+                              const next = !m;
+                              try {
+                                localStorage.setItem('messages_muted', next ? '1' : '0');
+                              } catch (e) {}
+                              alert(next ? 'Chat muted' : 'Chat unmuted');
+                              return next;
+                            });
+                          }}
+                        >
+                          {muted ? 'Unmute chat' : 'Mute chat'}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
 
                   <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 bg-white">
@@ -411,6 +635,7 @@ export default function MessagesPage() {
                         onChange={(e) => setText(e.target.value)}
                         placeholder="Write a message..."
                         className="h-10"
+                        disabled={!activeConv.isAcceptedConnection}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             e.preventDefault();
@@ -418,8 +643,11 @@ export default function MessagesPage() {
                           }
                         }}
                       />
-                      <Button onClick={sendMessage} className="bg-skillswap-500 text-white">Send</Button>
+                      <Button onClick={sendMessage} className="bg-skillswap-500 text-white" disabled={!activeConv.isAcceptedConnection}>Send</Button>
                     </div>
+                    {!activeConv.isAcceptedConnection && (
+                      <p className="mt-2 text-xs text-skillswap-500">You can only chat once the connection is accepted.</p>
+                    )}
                   </div>
                 </>
               )}

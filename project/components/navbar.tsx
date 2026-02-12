@@ -25,10 +25,10 @@ export function Navbar() {
 
   return (
     <header className="w-full border-b border-skillswap-800 bg-skillswap-300">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-6">
         <Link
           href="/"
-          className="relative h-10 w-44"
+          className="relative h-8 w-32 sm:h-10 sm:w-44"
           aria-label="SkillSwap home"
         >
           <Image
@@ -37,7 +37,7 @@ export function Navbar() {
             fill
             priority
             className="object-contain"
-            sizes="176px"
+            sizes="(max-width: 640px) 128px, 176px"
           />
         </Link>
 
