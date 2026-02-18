@@ -234,7 +234,8 @@ export default function CalendarStandalonePage() {
           .select('*')
           .or(`user_a_id.eq.${user.id},user_b_id.eq.${user.id}`)
           .order('scheduled_at', { ascending: true });
-        setSessions((data || []) as SkillSwapSession[]);
+        // only show sessions that are scheduled
+        setSessions(((data || []) as SkillSwapSession[]).filter((s) => s.status === 'scheduled'));
       } catch (e) {
         console.warn('Failed to load sessions', e);
         setSessions([]);

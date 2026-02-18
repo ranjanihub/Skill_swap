@@ -23,9 +23,7 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [canResend, setCanResend] = useState(false);
-  const [fillProfileNow, setFillProfileNow] = useState(false);
-  const [fullName, setFullName] = useState('');
-  const [bio, setBio] = useState('');
+  
 
   const validateForm = () => {
     if (!email) {
@@ -63,25 +61,7 @@ export default function LoginPage() {
     try {
       setLoading(true);
       const signInResult = await signIn(email, password);
-      // If the user chose to provide profile details during login, upsert them now.
-      if (fillProfileNow) {
-        try {
-          const userId =
-            signInResult?.session?.user?.id || signInResult?.user?.id || null;
-          if (userId) {
-            await supabase.from('user_profiles').upsert(
-              {
-                id: userId,
-                full_name: fullName.trim() || null,
-                bio: bio.trim() || null,
-              },
-              { onConflict: 'id' }
-            );
-          }
-        } catch (e) {
-          console.warn('Failed to save profile on login:', e);
-        }
-      }
+      // proceed to home after successful sign-in
       router.push('/');
     } catch (err) {
       const errorMessage =
@@ -256,18 +236,7 @@ export default function LoginPage() {
                   Remember me
                 </label>
               </div>
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="fillProfile"
-                  checked={fillProfileNow}
-                  onCheckedChange={(checked) => setFillProfileNow(checked as boolean)}
-                  disabled={loading || googleLoading}
-                  aria-label="Add profile details now"
-                />
-                <label htmlFor="fillProfile" className="text-sm text-skillswap-600 cursor-pointer">
-                  Add profile details now
-                </label>
-              </div>
+            
               <Link
                 href="/forgot-password"
                 className="text-sm text-skillswap-500 hover:text-skillswap-600 transition-colors"
@@ -276,37 +245,7 @@ export default function LoginPage() {
               </Link>
             </div>
 
-            {fillProfileNow && (
-              <div className="space-y-4 mt-4">
-                <div>
-                  <label htmlFor="fullName" className="block text-sm font-medium text-skillswap-dark mb-2">
-                    Full name (optional)
-                  </label>
-                  <Input
-                    id="fullName"
-                    type="text"
-                    placeholder="Your full name"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    disabled={loading || googleLoading}
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="bio" className="block text-sm font-medium text-skillswap-dark mb-2">
-                    Short bio (optional)
-                  </label>
-                  <Input
-                    id="bio"
-                    type="text"
-                    placeholder="A short bio or headline"
-                    value={bio}
-                    onChange={(e) => setBio(e.target.value)}
-                    disabled={loading || googleLoading}
-                  />
-                </div>
-              </div>
-            )}
+            
 
             <Button
               type="submit"

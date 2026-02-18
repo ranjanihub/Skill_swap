@@ -130,14 +130,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <LogOut className="h-5 w-5" />
           </Button>
         }
-        headerLeft={
-          <>
-            <p className="text-sm sm:text-base font-semibold text-skillswap-dark truncate">
-              Good morning, {displayName}
-            </p>
-            <p className="text-xs text-skillswap-600 truncate">Welcome back to SkillSwap</p>
-          </>
-        }
+        headerLeft={null}
         headerRight={
           <>
             <ThemeToggle />
@@ -150,6 +143,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               onClick={() => router.push('/notifications')}
             >
               <Bell className="h-5 w-5" />
+            </Button>
+
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={handleSignOut}
+              className="text-skillswap-600 hover:bg-skillswap-50"
+              aria-label="Sign out from SkillSwap"
+              title="Sign out"
+            >
+              <LogOut className="h-5 w-5" />
             </Button>
 
             <Avatar className="h-9 w-9">

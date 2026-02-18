@@ -107,32 +107,9 @@ export default function AppShell({
           <div className="flex items-center gap-1 sm:gap-2">{headerRight}</div>
         </header>
 
-        <main className={cn('flex-1 p-4 sm:p-6', showMobileBottomNav && 'pb-24')}>{children}</main>
+        <main className={cn('flex-1 p-4 sm:p-6')}>{children}</main>
       </div>
-      {/* Mobile bottom navigation when no left sidebar */}
-      {showMobileBottomNav && (
-        <nav className="fixed inset-x-0 bottom-0 h-16 bg-white border-t border-skillswap-200 flex items-center justify-around px-4 sm:px-8">
-          {bottomNav.map((item) => {
-            const isActive = pathname === item.href;
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  'bottom-nav-item',
-                  isActive && 'text-skillswap-500'
-                )}
-                aria-label={item.label}
-                title={item.label}
-              >
-                <Icon className="h-5 w-5" />
-                <span className="text-[11px]">{item.label}</span>
-              </Link>
-            );
-          })}
-        </nav>
-      )}
+      {/* bottom nav removed from AppShell; use global BottomNav instead */}
     </div>
   );
 }

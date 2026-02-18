@@ -49,103 +49,51 @@ type SkillEditDraft = {
 };
 
 const defaultTeachDraft: TeachDraft = { name: '', proficiency_level: 'beginner' };
-const defaultLearnDraft: LearnDraft = {
-  name: '',
-  proficiency_level: 'beginner',
-  goal: '',
-};
-
-function getSupabaseErrorMessage(err: unknown, fallback: string) {
-  if (!err) return fallback;
-  if (err instanceof Error && err.message) return err.message;
-  if (typeof err === 'object' && 'message' in err && typeof (err as any).message === 'string') {
-    const message = (err as any).message as string;
-    const details = typeof (err as any).details === 'string' ? (err as any).details : '';
-    const hint = typeof (err as any).hint === 'string' ? (err as any).hint : '';
-    return [message, details, hint].filter(Boolean).join(' — ');
-  }
-  return fallback;
-}
-
-function isMissingTableSchemaCacheError(message: string) {
-  const m = message.toLowerCase();
-  return (
-    m.includes("could not find the table") &&
-    m.includes('schema cache') &&
-    (m.includes('public.user_profiles') || m.includes('public.skills'))
-  );
-}
+const defaultLearnDraft: LearnDraft = { name: '', proficiency_level: 'beginner', goal: '' };
 
 export default function SettingsPage() {
+
   const { user, loading: authLoading } = useAuth();
 
   const [draft, setDraft] = useState<ProfileDraft>({ full_name: '', bio: '' });
+  const [settings, setSettings] = useState<Partial<UserSettings>>({});
   const [skills, setSkills] = useState<Skill[]>([]);
-  const [teachDraft, setTeachDraft] = useState<TeachDraft>(defaultTeachDraft);
-  const [learnDraft, setLearnDraft] = useState<LearnDraft>(defaultLearnDraft);
-  const [editingSkillId, setEditingSkillId] = useState<string | null>(null);
-  const [editDraft, setEditDraft] = useState<SkillEditDraft>({
-    name: '',
-    proficiency_level: 'beginner',
-    goal: '',
-  });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [uploadingAvatar, setUploadingAvatar] = useState(false);
-  const AVATAR_BUCKET = 'avatars';
   const [dbSetupError, setDbSetupError] = useState<string | null>(null);
-  const [settings, setSettings] = useState<Partial<UserSettings>>({});
 
-  const arrToCsv = (arr?: string[] | null) => (Array.isArray(arr) ? arr.join(', ') : arr ?? '');
-  const csvToArr = (s?: string | null) => {
-    if (!s) return null;
-    return s
-      .split(',')
-      .map((p) => p.trim())
-      .filter(Boolean);
+  const [teachDraft, setTeachDraft] = useState<TeachDraft>(defaultTeachDraft);
+  const [learnDraft, setLearnDraft] = useState<LearnDraft>(defaultLearnDraft);
+  const [editingSkillId, setEditingSkillId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<SkillEditDraft>({ name: '', proficiency_level: 'beginner', goal: '' });
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [pairNotes, setPairNotes] = useState('');
+
+  const AVATAR_BUCKET = 'avatars';
+
+  const arrToCsv = (arr?: any[]) => (arr || []).join(', ');
+  const csvToArr = (s?: string) => (s ? s.split(',').map((p) => p.trim()).filter(Boolean) : []);
+
+  const getSupabaseErrorMessage = (err: unknown, fallback = 'An error occurred') => {
+    if (!err) return fallback;
+    // @ts-expect-error
+    if (typeof err === 'string') return err;
+    // @ts-expect-error
+    if (err?.message) return err.message;
+    return fallback;
   };
 
-  const canSave = useMemo(() => true, []);
+  const isMissingTableSchemaCacheError = (msg?: string) => {
+    if (!msg) return false;
+    return msg.includes('does not exist') || msg.includes('missing') || msg.includes('relation');
+  };
 
   const ensureUserProfileRow = async () => {
     if (!user) return;
-    const fullNameFromMetadata =
-      (user.user_metadata?.full_name as string | undefined) ||
-      (user.email?.split('@')[0] ?? '');
-    try {
-      const { error: upsertError } = await supabase.from('user_profiles').upsert(
-        {
-          id: user.id,
-          full_name: fullNameFromMetadata.trim() || null,
-          bio: null,
-        },
-        { onConflict: 'id' }
-      );
-
-      if (upsertError) throw upsertError;
-    } catch (err) {
-      const msg = getSupabaseErrorMessage(err, 'Failed to ensure profile row');
-      // If RLS blocked us (common when the session token isn't applied yet), call server endpoint that uses service-role key
-      if (typeof msg === 'string' && msg.toLowerCase().includes('row-level')) {
-        try {
-          const res = await fetch('/api/ensure-profile', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: user.id, full_name: fullNameFromMetadata.trim() || null, bio: null }),
-          });
-          if (!res.ok) {
-            const json = await res.json();
-            throw new Error(json?.error || 'Server failed to create profile');
-          }
-          return;
-        } catch (e) {
-          throw e;
-        }
-      }
-      throw err;
-    }
+    const { error } = await supabase.from('user_profiles').upsert({ id: user.id }, { onConflict: 'id' });
+    if (error) throw error;
   };
 
   const ensureUserSettingsRow = async () => {
@@ -344,6 +292,13 @@ export default function SettingsPage() {
 
   const teach = useMemo(() => skills.filter((s) => s.skill_type === 'teach'), [skills]);
   const learn = useMemo(() => skills.filter((s) => s.skill_type === 'learn'), [skills]);
+
+  const canSave = (() => {
+    if (!user) return false;
+    const profileHas = (draft.full_name || '').trim() !== '' || (draft.bio || '').trim() !== '';
+    const settingsHave = Object.keys(settings || {}).length > 0;
+    return profileHas || settingsHave;
+  })();
 
   const updateSetting = (patch: Partial<UserSettings>) => {
     setSettings((s) => ({ ...(s || {}), ...patch }));
@@ -754,40 +709,123 @@ export default function SettingsPage() {
         </Button>
       </Card>
 
-      <div className="mt-6">
-        <h2 className="text-xl font-bold text-skillswap-dark">Public profile preview</h2>
-        <p className="text-sm text-skillswap-600">How your profile will appear to others.</p>
+      <div>
+        <h2 className="text-xl font-bold text-skillswap-dark">Skill Exchange Core</h2>
+        <p className="text-skillswap-600">
+          Tell SkillSwap what you can teach and what you want to learn.
+        </p>
       </div>
 
-      <Card className="p-6 bg-white border-2 border-skillswap-200">
-        <div className="flex items-start gap-4">
-          {settings.avatar_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={settings.avatar_url} alt={`Avatar for ${settings.display_name || settings.username || draft.full_name}`} className="w-24 h-24 rounded-full object-cover" />
-          ) : (
-            <div className="w-24 h-24 rounded-full bg-skillswap-100 flex items-center justify-center text-xl font-medium text-skillswap-600">{(settings.display_name || settings.username || draft.full_name || 'S').charAt(0)}</div>
-          )}
-          <div>
-            <h2 className="text-xl font-semibold text-skillswap-dark">{settings.display_name || settings.username || draft.full_name || 'SkillSwap member'}</h2>
-            {settings.headline && <p className="text-sm text-skillswap-600">{settings.headline}</p>}
-            <p className="text-sm text-skillswap-600 mt-1">{user?.email}</p>
+      <div>
+        <Card className="p-6 bg-white border-2 border-skillswap-200">
+          <h3 className="text-lg font-semibold text-skillswap-dark">Skill exchange pair</h3>
+          <p className="text-sm text-skillswap-600">Enter the skill you offer and the skill you want to learn.</p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+            <div>
+              <Label className="text-skillswap-dark">I am offering (skill)</Label>
+              <Input
+                value={teachDraft.name}
+                onChange={(e) => setTeachDraft((d) => ({ ...d, name: e.target.value }))}
+                placeholder="e.g., React, Public speaking"
+                disabled={saving}
+              />
+              <Label className="text-sm mt-2 text-skillswap-dark">Proficiency</Label>
+              <Select
+                value={teachDraft.proficiency_level}
+                onValueChange={(v) => setTeachDraft((d) => ({ ...d, proficiency_level: v as Skill['proficiency_level'] }))}
+                disabled={saving}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select level" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="beginner">Beginner</SelectItem>
+                  <SelectItem value="intermediate">Intermediate</SelectItem>
+                  <SelectItem value="advanced">Advanced</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label className="text-skillswap-dark">I want to learn (skill)</Label>
+              <Input
+                value={learnDraft.name}
+                onChange={(e) => setLearnDraft((d) => ({ ...d, name: e.target.value }))}
+                placeholder="e.g., UI design, Python"
+                disabled={saving}
+              />
+              <Label className="text-sm mt-2 text-skillswap-dark">Current level</Label>
+              <Select
+                value={learnDraft.proficiency_level}
+                onValueChange={(v) => setLearnDraft((d) => ({ ...d, proficiency_level: v as Skill['proficiency_level'] }))}
+                disabled={saving}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select level" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="beginner">Beginner</SelectItem>
+                  <SelectItem value="intermediate">Intermediate</SelectItem>
+                  <SelectItem value="advanced">Advanced</SelectItem>
+                </SelectContent>
+              </Select>
+              <Label className="text-sm mt-2 text-skillswap-dark">Goal (optional)</Label>
+              <Input value={learnDraft.goal} onChange={(e) => setLearnDraft((d) => ({ ...d, goal: e.target.value }))} placeholder="e.g., Build a portfolio in 30 days" disabled={saving} />
+            </div>
           </div>
-        </div>
 
-        {draft.bio && <p className="text-skillswap-600 mt-4">{draft.bio}</p>}
+            <div className="mt-4">
+              <Label className="text-skillswap-dark">Additional notes (optional)</Label>
+              <Textarea value={pairNotes} onChange={(e) => setPairNotes(e.target.value)} placeholder="Anything you'd like to mention about this pair (optional)" disabled={saving} />
+            </div>
 
-        <div className="mt-4 space-y-1 text-sm text-skillswap-600">
-          {settings.location && <div>Location: {settings.location}</div>}
-          {settings.timezone && <div>Timezone: {settings.timezone}</div>}
-          {settings.languages && settings.languages.length > 0 && <div>Languages: {(settings.languages || []).join(', ')}</div>}
-          {settings.websites && settings.websites.length > 0 && (
-            <div>Websites: {(settings.websites || []).map((w, i) => <span key={i} className="mr-2">{w}</span>)}</div>
-          )}
-        </div>
+          <div className="flex justify-end mt-4">
+            <Button
+              onClick={async () => {
+                if (!user) return;
+                const offerName = teachDraft.name.trim();
+                const wantName = learnDraft.name.trim();
+                if (!offerName && !wantName) {
+                  setError('Provide at least one skill to add');
+                  return;
+                }
+                try {
+                  setSaving(true);
+                  setError('');
+                  await ensureUserProfileRow();
+                  const inserts: Partial<Skill>[] = [];
+                  if (offerName) {
+                    inserts.push({ user_id: user.id, name: offerName, skill_type: 'teach', proficiency_level: teachDraft.proficiency_level, category: null, description: null });
+                  }
+                  if (wantName) {
+                    inserts.push({ user_id: user.id, name: wantName, skill_type: 'learn', proficiency_level: learnDraft.proficiency_level, category: null, description: learnDraft.goal.trim() || null });
+                  }
+                  if (inserts.length > 0) {
+                    const { error: insertError } = await supabase.from('skills').insert(inserts);
+                    if (insertError) throw insertError;
+                    await refreshSkills();
+                    setTeachDraft(defaultTeachDraft);
+                    setLearnDraft(defaultLearnDraft);
+                    setSuccess('Skill pair added');
+                  }
+                } catch (err) {
+                  setError(getSupabaseErrorMessage(err, 'Failed to add skills'));
+                } finally {
+                  setSaving(false);
+                }
+              }}
+              disabled={saving}
+              className="bg-skillswap-500 text-white hover:bg-skillswap-600"
+            >
+              Add pair
+            </Button>
+          </div>
+        </Card>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
           <Card className="p-6 bg-white border-2 border-skillswap-200">
-            <h3 className="font-semibold text-skillswap-dark mb-4">Teaching</h3>
+            <h4 className="font-semibold text-skillswap-dark mb-3">Teaching</h4>
             {teach.length === 0 ? (
               <p className="text-sm text-skillswap-600">No teaching skills yet.</p>
             ) : (
@@ -796,11 +834,13 @@ export default function SettingsPage() {
                   <div key={s.id} className="flex items-start justify-between gap-3">
                     <div>
                       <p className="font-medium text-skillswap-dark">{s.name}</p>
-                      {(s.category || s.description) && (
-                        <p className="text-sm text-skillswap-600">{s.category || s.description}</p>
-                      )}
+                      {(s.category || s.description) && <p className="text-sm text-skillswap-600">{s.category || s.description}</p>}
                     </div>
-                    <Badge variant="outline">{s.proficiency_level}</Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline">{s.proficiency_level}</Badge>
+                      <Button variant="outline" size="sm" onClick={() => startEditSkill(s)} disabled={saving}>Edit</Button>
+                      <Button variant="outline" size="sm" onClick={() => deleteSkill(s)} disabled={saving}>Delete</Button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -808,338 +848,28 @@ export default function SettingsPage() {
           </Card>
 
           <Card className="p-6 bg-white border-2 border-skillswap-200">
-            <h3 className="font-semibold text-skillswap-dark mb-4">Learning</h3>
+            <h4 className="font-semibold text-skillswap-dark mb-3">Learning</h4>
             {learn.length === 0 ? (
-              <p className="text-sm text-skillswap-600">No learning goals yet.</p>
+              <p className="text-sm text-skillswap-600">No learning skills added yet.</p>
             ) : (
               <div className="space-y-3">
                 {learn.map((s) => (
                   <div key={s.id} className="flex items-start justify-between gap-3">
                     <div>
                       <p className="font-medium text-skillswap-dark">{s.name}</p>
-                      {(s.category || s.description) && (
-                        <p className="text-sm text-skillswap-600">{s.category || s.description}</p>
-                      )}
+                      {s.description && <p className="text-sm text-skillswap-600">Goal: {s.description}</p>}
                     </div>
-                    <Badge variant="outline">{s.proficiency_level}</Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline">{s.proficiency_level}</Badge>
+                      <Button variant="outline" size="sm" onClick={() => startEditSkill(s)} disabled={saving}>Edit</Button>
+                      <Button variant="outline" size="sm" onClick={() => deleteSkill(s)} disabled={saving}>Delete</Button>
+                    </div>
                   </div>
                 ))}
               </div>
             )}
           </Card>
         </div>
-      </Card>
-
-      <div>
-        <h2 className="text-xl font-bold text-skillswap-dark">Skill Exchange Core</h2>
-        <p className="text-skillswap-600">
-          Tell SkillSwap what you can teach and what you want to learn.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="p-6 bg-white border-2 border-skillswap-200 space-y-5">
-          <div>
-            <h3 className="text-lg font-semibold text-skillswap-dark">Skills I Can Teach</h3>
-            <p className="text-sm text-skillswap-600">Add skills you can help others with.</p>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <Label className="text-skillswap-dark">Skill name</Label>
-              <Input
-                value={teachDraft.name}
-                onChange={(e) => setTeachDraft((d) => ({ ...d, name: e.target.value }))}
-                placeholder="e.g., React, Public speaking"
-                disabled={saving}
-              />
-            </div>
-
-            <div>
-              <Label className="text-skillswap-dark">Proficiency level</Label>
-              <Select
-                value={teachDraft.proficiency_level}
-                onValueChange={(v) =>
-                  setTeachDraft((d) => ({
-                    ...d,
-                    proficiency_level: v as Skill['proficiency_level'],
-                  }))
-                }
-                disabled={saving}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select level" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="beginner">Beginner</SelectItem>
-                  <SelectItem value="intermediate">Intermediate</SelectItem>
-                  <SelectItem value="advanced">Advanced</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <Button
-              onClick={addTeachSkill}
-              disabled={saving}
-              className="bg-skillswap-500 text-white hover:bg-skillswap-600"
-            >
-              Add
-            </Button>
-          </div>
-
-          <div className="pt-2">
-            {teachSkills.length === 0 ? (
-              <p className="text-sm text-skillswap-600">No teaching skills added yet.</p>
-            ) : (
-              <div className="space-y-2">
-                {teachSkills.slice(0, 6).map((s) => (
-                  <div key={s.id} className="rounded-lg border border-skillswap-200 bg-skillswap-50 px-3 py-2">
-                    {editingSkillId === s.id ? (
-                      <div className="space-y-3">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <Input
-                            value={editDraft.name}
-                            onChange={(e) => setEditDraft((d) => ({ ...d, name: e.target.value }))}
-                            disabled={saving}
-                          />
-                          <Select
-                            value={editDraft.proficiency_level}
-                            onValueChange={(v) =>
-                              setEditDraft((d) => ({
-                                ...d,
-                                proficiency_level: v as Skill['proficiency_level'],
-                              }))
-                            }
-                            disabled={saving}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select level" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="beginner">Beginner</SelectItem>
-                              <SelectItem value="intermediate">Intermediate</SelectItem>
-                              <SelectItem value="advanced">Advanced</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            onClick={() => saveEditedSkill(s)}
-                            disabled={saving}
-                            className="bg-skillswap-500 text-white hover:bg-skillswap-600"
-                          >
-                            Save
-                          </Button>
-                          <Button
-                            onClick={cancelEditSkill}
-                            disabled={saving}
-                            variant="outline"
-                          >
-                            Cancel
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="font-medium text-skillswap-dark truncate">{s.name}</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline">{s.proficiency_level}</Badge>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => startEditSkill(s)}
-                            disabled={saving}
-                          >
-                            Edit
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => (window.location.href = `/dashboard/skill-assessment?skillId=${s.id}`)}
-                            disabled={saving}
-                          >
-                            Test
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => deleteSkill(s)}
-                            disabled={saving}
-                          >
-                            Delete
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </Card>
-
-        <Card className="p-6 bg-white border-2 border-skillswap-200 space-y-5">
-          <div>
-            <h3 className="text-lg font-semibold text-skillswap-dark">Skills I Want to Learn</h3>
-            <p className="text-sm text-skillswap-600">Add skills you want to learn.</p>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <Label className="text-skillswap-dark">Skill name</Label>
-              <Input
-                value={learnDraft.name}
-                onChange={(e) => setLearnDraft((d) => ({ ...d, name: e.target.value }))}
-                placeholder="e.g., UI design, Python"
-                disabled={saving}
-              />
-            </div>
-
-            <div>
-              <Label className="text-skillswap-dark">Current level</Label>
-              <Select
-                value={learnDraft.proficiency_level}
-                onValueChange={(v) =>
-                  setLearnDraft((d) => ({
-                    ...d,
-                    proficiency_level: v as Skill['proficiency_level'],
-                  }))
-                }
-                disabled={saving}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select level" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="beginner">Beginner</SelectItem>
-                  <SelectItem value="intermediate">Intermediate</SelectItem>
-                  <SelectItem value="advanced">Advanced</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label className="text-skillswap-dark">Goal (optional short text)</Label>
-              <Input
-                value={learnDraft.goal}
-                onChange={(e) => setLearnDraft((d) => ({ ...d, goal: e.target.value }))}
-                placeholder="e.g., Build a portfolio in 30 days"
-                disabled={saving}
-              />
-            </div>
-
-            <Button
-              onClick={addLearnSkill}
-              disabled={saving}
-              className="bg-skillswap-500 text-white hover:bg-skillswap-600"
-            >
-              Add
-            </Button>
-          </div>
-
-          <div className="pt-2">
-            {learnSkills.length === 0 ? (
-              <p className="text-sm text-skillswap-600">No learning skills added yet.</p>
-            ) : (
-              <div className="space-y-2">
-                {learnSkills.slice(0, 6).map((s) => (
-                  <div key={s.id} className="rounded-lg border border-skillswap-200 bg-skillswap-50 px-3 py-2">
-                    {editingSkillId === s.id ? (
-                      <div className="space-y-3">
-                        <div className="grid grid-cols-1 gap-3">
-                          <Input
-                            value={editDraft.name}
-                            onChange={(e) => setEditDraft((d) => ({ ...d, name: e.target.value }))}
-                            disabled={saving}
-                          />
-                          <Select
-                            value={editDraft.proficiency_level}
-                            onValueChange={(v) =>
-                              setEditDraft((d) => ({
-                                ...d,
-                                proficiency_level: v as Skill['proficiency_level'],
-                              }))
-                            }
-                            disabled={saving}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select level" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="beginner">Beginner</SelectItem>
-                              <SelectItem value="intermediate">Intermediate</SelectItem>
-                              <SelectItem value="advanced">Advanced</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <Input
-                            value={editDraft.goal}
-                            onChange={(e) => setEditDraft((d) => ({ ...d, goal: e.target.value }))}
-                            placeholder="Goal (optional short text)"
-                            disabled={saving}
-                          />
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            onClick={() => saveEditedSkill(s)}
-                            disabled={saving}
-                            className="bg-skillswap-500 text-white hover:bg-skillswap-600"
-                          >
-                            Save
-                          </Button>
-                          <Button
-                            onClick={cancelEditSkill}
-                            disabled={saving}
-                            variant="outline"
-                          >
-                            Cancel
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="space-y-1">
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="font-medium text-skillswap-dark truncate">{s.name}</p>
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline">{s.proficiency_level}</Badge>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => startEditSkill(s)}
-                              disabled={saving}
-                            >
-                              Edit
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => (window.location.href = `/dashboard/skill-assessment?skillId=${s.id}`)}
-                              disabled={saving}
-                            >
-                              Test
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => deleteSkill(s)}
-                              disabled={saving}
-                            >
-                              Delete
-                            </Button>
-                          </div>
-                        </div>
-                        {s.description && (
-                          <p className="text-xs text-skillswap-600 truncate">Goal: {s.description}</p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </Card>
       </div>
     </div>
   );

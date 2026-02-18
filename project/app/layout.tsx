@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { AuthProvider } from '@/context/auth-context';
 import NavbarWrapper from '@/components/navbar-wrapper';
+import BottomNav from '@/components/bottom-nav';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -24,7 +25,8 @@ export default function RootLayout({
       <body className={inter.className}>
         <AuthProvider>
           <NavbarWrapper />
-          {children}
+          <div className="min-h-screen pb-[calc(4.5rem+env(safe-area-inset-bottom))]">{children}</div>
+          <BottomNav />
         </AuthProvider>
       </body>
     </html>
