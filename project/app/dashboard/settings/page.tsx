@@ -73,15 +73,13 @@ export default function SettingsPage() {
 
   const AVATAR_BUCKET = 'avatars';
 
-  const arrToCsv = (arr?: any[]) => (arr || []).join(', ');
+  const arrToCsv = (arr?: any[] | null) => (arr ?? []).join(', ');
   const csvToArr = (s?: string) => (s ? s.split(',').map((p) => p.trim()).filter(Boolean) : []);
 
   const getSupabaseErrorMessage = (err: unknown, fallback = 'An error occurred') => {
     if (!err) return fallback;
-    // @ts-expect-error
-    if (typeof err === 'string') return err;
-    // @ts-expect-error
-    if (err?.message) return err.message;
+    if (typeof err === 'string') return err as string;
+    if ((err as any)?.message) return (err as any).message;
     return fallback;
   };
 
