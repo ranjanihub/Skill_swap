@@ -8,7 +8,11 @@ import { useRouter } from 'next/navigation';
 import { Home as HomeIcon, Users, Calendar, Bell, Briefcase, MessageSquare, Search, Compass, UserCircle } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
 import AppShell, { type ShellNavItem } from '@/components/app-shell';
+import AvailabilityPicker from '@/components/calendar/AvailabilityPicker';
+// Matched swaps render inline in the sidebar; no popover needed
+import { Button } from '@/components/ui/button';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import PostDetail from '@/components/post/PostDetail';
 import {
   isSupabaseConfigured,
   supabase,
@@ -43,6 +47,9 @@ export default function Home() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [requestsBySkillId, setRequestsBySkillId] = useState<Record<string, ConnectionRequest[]>>({});
   const [sending, setSending] = useState<Record<string, boolean>>({});
+  const [availModal, setAvailModal] = useState<{ ownerId: string; skill?: Skill } | null>(null);
+  const [availabilities, setAvailabilities] = useState<string[]>([]);
+  const [newAvailability, setNewAvailability] = useState('');
 
   const [query, setQuery] = useState('');
   const [showPostModal, setShowPostModal] = useState(false);
@@ -53,6 +60,88 @@ export default function Home() {
   const [quizVisible, setQuizVisible] = useState(false);
   const [quizAnswers, setQuizAnswers] = useState<Record<number, string>>({});
   const [posting, setPosting] = useState(false);
+
+  const [matchedSwaps, setMatchedSwaps] = useState([]);
+  const [matchedDetails, setMatchedDetails] = useState<Array<any>>([]);
+  const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
+  const [selectedPostFallback, setSelectedPostFallback] = useState<any | null>(null);
+
+  useEffect(() => {
+    const fetchMatchedSwaps = async () => {
+      try {
+        const response = await fetch('/api/matched-swaps');
+        const data = await response.json();
+        setMatchedSwaps(data);
+      } catch (error) {
+        console.error('Failed to fetch matched swaps:', error);
+      }
+    };
+
+    fetchMatchedSwaps();
+  }, []);
+
+  const matchedCounts = useMemo(() => {
+    const map: Record<string, number> = {};
+    (matchedSwaps || []).forEach((m: any) => {
+      if (!m || !m.skill) return;
+      map[m.skill] = (map[m.skill] || 0) + 1;
+    });
+    return map;
+  }, [matchedSwaps]);
+
+  useEffect(() => {
+    const loadDetails = async () => {
+      if (!matchedSwaps || matchedSwaps.length === 0) {
+        setMatchedDetails([]);
+        return;
+      }
+      // Validate UUIDs to avoid passing dev/sample ids to Supabase which expects UUIDs
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      const allTeacherIds = Array.from(new Set(matchedSwaps.map((m: any) => m.teacher_id))).filter(Boolean);
+      const allTeachSkillIds = Array.from(new Set(matchedSwaps.map((m: any) => m.teach_skill_id))).filter(Boolean);
+
+      const teacherIds = allTeacherIds.filter((id) => uuidRegex.test(id)).slice(0, 200);
+      const teachSkillIds = allTeachSkillIds.filter((id) => uuidRegex.test(id)).slice(0, 200);
+
+      // If there are no valid UUIDs to query, construct details locally from matchedSwaps
+      if (teacherIds.length === 0 && teachSkillIds.length === 0) {
+        const details = (matchedSwaps || []).map((m: any) => ({ ...m, teacher: null, teachSkill: null }));
+        setMatchedDetails(details);
+        return;
+      }
+
+      try {
+        const results = await Promise.all([
+          supabase.from('user_profiles').select('id, full_name').in('id', teacherIds),
+          supabase.from('skills').select('id, name, proficiency_level, user_id').in('id', teachSkillIds),
+        ]);
+
+        const profilesData = results[0].data || [];
+        const teachSkillsData = results[1].data || [];
+
+        const profilesMap: Record<string, any> = {};
+        (profilesData || []).forEach((p: any) => (profilesMap[p.id] = p));
+
+        const skillsMap: Record<string, any> = {};
+        (teachSkillsData || []).forEach((s: any) => (skillsMap[s.id] = s));
+
+        const details = (matchedSwaps || []).map((m: any) => ({
+          ...m,
+          teacher: profilesMap[m.teacher_id] || null,
+          teachSkill: skillsMap[m.teach_skill_id] || null,
+        }));
+
+        setMatchedDetails(details);
+      } catch (err) {
+        console.error('Failed to load matched details', err);
+        // Fallback: don't crash, show basic matched items
+        const details = (matchedSwaps || []).map((m: any) => ({ ...m, teacher: null, teachSkill: null }));
+        setMatchedDetails(details);
+      }
+    };
+
+    loadDetails();
+  }, [matchedSwaps]);
 
   const publicNav: ShellNavItem[] = [
     { href: '/', label: 'Home', icon: HomeIcon },
@@ -155,6 +244,21 @@ export default function Home() {
 
     void run();
   }, [authLoading, user, configError]);
+
+  // Listen for child PostDetail requests to open the availability modal
+  useEffect(() => {
+    const handler = (e: any) => {
+      try {
+        const d = e.detail;
+        if (!d) return;
+        openAvailabilityModal(d.ownerId, d.skill);
+      } catch (err) {
+        // ignore
+      }
+    };
+    window.addEventListener('open-availability', handler as EventListener);
+    return () => window.removeEventListener('open-availability', handler as EventListener);
+  }, []);
 
   // allow refresh of feed after posting
   const refreshFeed = async () => {
@@ -307,7 +411,7 @@ export default function Home() {
     });
   }, [feed, query]);
 
-  const sendSwapRequest = async (ownerId: string, skillId?: string) => {
+  const sendSwapRequest = async (ownerId: string, skillId?: string, avail?: string[]) => {
     if (!user) return;
     const key = skillId || ownerId;
 
@@ -331,6 +435,23 @@ export default function Home() {
           [data.skill_id as string]: [...(prev[data.skill_id as string] || []), data as any],
         }));
       }
+      // create a notification including availabilities if provided
+      try {
+        const requesterName = (user.user_metadata?.full_name as string) || (user.email || '').split('@')[0] || 'Someone';
+        await supabase.from('notifications').insert({
+          user_id: ownerId,
+          type: 'connection_request',
+          payload: {
+            requester_id: user.id,
+            requester_name: requesterName,
+            skill_id: skillId || null,
+            skill_name: skillId ? (feed.find((f) => f.id === ownerId)?.skills.find((s) => s.id === skillId)?.name ?? null) : null,
+            availabilities: avail || [],
+          },
+        });
+      } catch (e) {
+        console.warn('notifications insert warning', e);
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to send request';
       setError(msg);
@@ -339,7 +460,33 @@ export default function Home() {
     }
   };
 
+  const openAvailabilityModal = (ownerId: string, skill?: Skill) => {
+    setAvailModal({ ownerId, skill });
+    setAvailabilities([]);
+    setNewAvailability('');
+  };
+
+  const addAvailability = () => {
+    const v = newAvailability.trim();
+    if (!v) return;
+    setAvailabilities((prev) => [...prev, v].slice(0, 6));
+    setNewAvailability('');
+  };
+
+  const removeAvailability = (idx: number) => setAvailabilities((prev) => prev.filter((_, i) => i !== idx));
+
+  const submitAvailabilityRequest = async () => {
+    if (!availModal) return;
+    if (availabilities.length === 0) {
+      setError('Please add at least one availability');
+      return;
+    }
+    await sendSwapRequest(availModal.ownerId, availModal.skill?.id, availabilities);
+    setAvailModal(null);
+  };
+
   return (
+    <>
     <AppShell
       showSidebar={false}
       nav={publicNav}
@@ -421,10 +568,79 @@ export default function Home() {
                 </div>
             </div>
             <div className="mt-4 border-t border-skillswap-200 pt-3 space-y-2 text-sm">
-              <div className="flex items-center gap-2"><span className="w-3 h-3 bg-skillswap-300 rounded-sm" />Saved items</div>
-              <div className="flex items-center gap-2"><span className="w-3 h-3 bg-skillswap-300 rounded-sm" />Groups</div>
-              <div className="flex items-center gap-2"><span className="w-3 h-3 bg-skillswap-300 rounded-sm" />Newsletters</div>
-              <div className="flex items-center gap-2"><span className="w-3 h-3 bg-skillswap-300 rounded-sm" />Events</div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="w-3 h-3 bg-skillswap-300 rounded-sm" />
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">Matched Swaps</span>
+                    {matchedDetails.length > 0 && (
+                      <span className="text-xs bg-skillswap-100 text-skillswap-700 rounded-full px-2 py-0.5">{matchedDetails.length}</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {matchedDetails.length === 0 ? (
+                <div className="ml-1 text-xs text-skillswap-500">No matches yet</div>
+              ) : (
+                <div className="mt-2 space-y-3">
+                  {matchedDetails.slice(0, 6).map((m) => (
+                    <div key={`${m.teacher_id}-${m.teach_skill_id}`} className="bg-white border border-skillswap-200 rounded-lg p-3">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-start gap-3">
+                          <div className="w-12 h-12 rounded-full overflow-hidden">
+                            <Avatar className="h-12 w-12">
+                              <AvatarFallback>{(m.teacher?.full_name || 'M').slice(0, 1)}</AvatarFallback>
+                            </Avatar>
+                          </div>
+                          <div>
+                            <div className="font-semibold text-sm text-skillswap-800">{m.teacher?.full_name || 'SkillSwap member'}</div>
+                            <p className="text-xs text-skillswap-600 mt-1">{m.teacher?.bio || 'SkillSwap member'}</p>
+                          </div>
+                        </div>
+                        <div className="text-xs text-skillswap-500">{m.created_at ? new Date(m.created_at).toLocaleString() : ''}</div>
+                      </div>
+
+                      <div className="mt-3 text-sm text-skillswap-700">
+                        <p className="font-medium text-skillswap-800">Skills</p>
+                        <ul className="mt-1 space-y-1">
+                          <li className="flex items-center justify-between">
+                            <span className="truncate">{m.teachSkill?.name || m.skill}</span>
+                            <span className="text-xs text-skillswap-500">{m.teachSkill?.proficiency_level || ''}</span>
+                          </li>
+                        </ul>
+                      </div>
+
+                      <div className="mt-3 flex gap-3">
+                        <button
+                          onClick={() => {
+                            // set selected post to show inline
+                            setSelectedPostId(m.teach_skill_id);
+                            setSelectedPostFallback(m);
+                            // scroll to center feed area
+                            const feedEl = document.querySelector('section.space-y-6');
+                            if (feedEl) feedEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                          }}
+                          className="btn-outline-rounded"
+                        >
+                          View Swap Post
+                        </button>
+                        <button
+                          onClick={() => {
+                            // open availability modal like other request buttons
+                            // prefer to pass the teachSkill object if available
+                            const skillObj = m.teachSkill ? { id: m.teachSkill.id, name: m.teachSkill.name, skill_type: 'teach', proficiency_level: m.teachSkill.proficiency_level } : undefined;
+                            openAvailabilityModal(m.teacher_id, skillObj as any);
+                          }}
+                          className="btn-primary-rounded"
+                        >
+                          Send Request
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </aside>
@@ -445,6 +661,12 @@ export default function Home() {
             <div className="feed-card">
               <div className="w-10 h-10 border-4 border-skillswap-200 border-t-skillswap-500 rounded-full animate-spin" />
             </div>
+          ) : selectedPostId ? (
+            <PostDetail
+              skillId={selectedPostId}
+              fallbackSkill={selectedPostFallback?.teachSkill ?? (selectedPostFallback ? { id: selectedPostFallback.teach_skill_id, name: selectedPostFallback.skill, description: selectedPostFallback.description ?? null, proficiency_level: selectedPostFallback.proficiency_level ?? null, user_id: selectedPostFallback.teacher_id } : undefined)}
+              fallbackOwner={selectedPostFallback?.teacher ?? null}
+            />
           ) : (
             (() => {
               const postedSwaps = filteredFeed.flatMap((owner) =>
@@ -510,7 +732,7 @@ export default function Home() {
                                 key={skill.id}
                                 className="btn-primary-rounded"
                                 disabled={!skill?.id || pending || isSending}
-                                onClick={() => skill?.id && sendSwapRequest(g.owner.id, skill.id)}
+                                onClick={() => skill?.id && openAvailabilityModal(g.owner.id, skill)}
                               >
                                 {pending ? 'Request Sent' : isSending ? 'Sending...' : `Request: ${skill.name}`}
                               </button>
@@ -549,5 +771,34 @@ export default function Home() {
         </aside>
       </div>
     </AppShell>
+      {/* Availability modal */}
+      {availModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-md bg-white rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold">Request swap — {availModal.skill?.name ?? 'Skill'}</h3>
+              <button onClick={() => setAvailModal(null)} className="text-sm text-skillswap-600">Close</button>
+            </div>
+            <p className="text-xs text-skillswap-500 mt-2">Add your available times (add multiple). The recipient will see these and can request a reschedule.</p>
+
+            <div className="mt-3">
+              {/* Calendar-based availability picker */}
+              {/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */}
+              {/* @ts-ignore */}
+              <AvailabilityPicker
+                availabilities={availabilities}
+                onAdd={(s: string) => setAvailabilities((prev) => [...prev, s].slice(0, 6))}
+                onRemove={(i: number) => setAvailabilities((prev) => prev.filter((_, idx) => idx !== i))}
+              />
+            </div>
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button onClick={() => setAvailModal(null)} className="btn-ghost">Cancel</button>
+              <button onClick={submitAvailabilityRequest} className="btn-primary">Send request</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

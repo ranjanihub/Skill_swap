@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import {
   isSupabaseConfigured,
@@ -19,6 +19,8 @@ type PublicProfile = Pick<UserProfile, 'id' | 'full_name' | 'bio'>;
 
 export default function ExplorePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const skillQuery = (searchParams?.get('skill') || '').trim();
   const { user, loading: authLoading } = useAuth();
 
   const [skills, setSkills] = useState<Skill[]>([]);
@@ -46,12 +48,11 @@ export default function ExplorePage() {
         setLoading(true);
         setError('');
 
-        const { data: skillsData, error: skillsError } = await supabase
-          .from('skills')
-          .select('*')
-          .neq('user_id', user.id)
-          .order('created_at', { ascending: false })
-          .limit(50);
+        // If a skill query is provided, filter server-side for better performance
+        const query = supabase.from('skills').select('*').neq('user_id', user.id).order('created_at', { ascending: false }).limit(50);
+        const { data: skillsData, error: skillsError } = skillQuery
+          ? await query.ilike('name', `%${skillQuery}%`)
+          : await query;
 
         if (skillsError) throw skillsError;
 
@@ -90,17 +91,18 @@ export default function ExplorePage() {
     };
 
     void run();
-  }, [authLoading, user, router]);
+  }, [authLoading, user, router, skillQuery]);
 
   const hasResults = skills.length > 0;
 
   const headerCopy = useMemo(() => {
     return {
-      title: 'Explore Skills & People',
-      subtitle:
-        'Browse what others want to teach and learn — then update your skills to get better matches.',
+      title: skillQuery ? `Explore: ${skillQuery}` : 'Explore Skills & People',
+      subtitle: skillQuery
+        ? `Showing results matching "${skillQuery}".`
+        : 'Browse what others want to teach and learn — then update your skills to get better matches.',
     };
-  }, []);
+  }, [skillQuery]);
 
   if (authLoading || loading) {
     return (
