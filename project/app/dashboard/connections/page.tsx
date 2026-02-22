@@ -1321,5 +1321,3 @@ export default function ConnectionsPage() {
     </div>
   );
 }
-
-*/
