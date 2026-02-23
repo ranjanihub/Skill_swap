@@ -685,30 +685,6 @@ export default function ConnectionsPage() {
     </div>
   );
 }
- 
-    const q = search.trim().toLowerCase();
-    return connections
-      .filter((c) => {
-        if (statusFilter.size > 0 && !statusFilter.has(c.status)) return false;
-        if (tab !== 'All') {
-          // best-effort: check skills for teach/learn
-          const hasTeach = c.skills.some((s) => s.skill_type === 'teach');
-          const hasLearn = c.skills.some((s) => s.skill_type === 'learn');
-          if (tab === 'Learning' && !hasLearn) return false;
-          if (tab === 'Teaching' && !hasTeach) return false;
-          if (tab === 'Mutual' && !(hasLearn && hasTeach)) return false;
-        }
-        if (!q) return true;
-        const name = c.profile?.full_name || '';
-        if (name.toLowerCase().includes(q)) return true;
-        return c.skills.some((s) => s.name.toLowerCase().includes(q));
-      })
-      .sort((a, b) => {
-        const dateA = a.lastActivity ? new Date(a.lastActivity).getTime() : 0;
-        const dateB = b.lastActivity ? new Date(b.lastActivity).getTime() : 0;
-        return dateB - dateA;
-      });
-  }, [connections, search, tab, statusFilter]);
 
   const getSkillStatus = (skill: Skill) => {
     // completed session takes precedence
