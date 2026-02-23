@@ -80,6 +80,7 @@ export async function GET() {
           teacher_id: 'dev-teacher-1',
           learn_skill_id: 'dev-learn-1',
           teach_skill_id: 'dev-teach-1',
+          teacher: { full_name: 'dev-teacher-1', bio: '' },
         },
         {
           skill: 'UI/UX',
@@ -87,9 +88,26 @@ export async function GET() {
           teacher_id: 'dev-teacher-2',
           learn_skill_id: 'dev-learn-2',
           teach_skill_id: 'dev-teach-2',
+          teacher: { full_name: 'dev-teacher-2', bio: '' },
         },
       ];
       return NextResponse.json(sample);
+    }
+
+    // attach teacher profile data for all matches so client can render the name directly
+    const teacherIds = Array.from(new Set(matches.map((m) => m.teacher_id))).filter(Boolean);
+    if (teacherIds.length > 0) {
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('user_profiles')
+        .select('id, full_name, bio')
+        .in('id', teacherIds);
+      if (!profilesError && profilesData) {
+        const map: Record<string, any> = {};
+        profilesData.forEach((p: any) => (map[p.id] = p));
+        matches.forEach((m) => {
+          m.teacher = map[m.teacher_id] || null;
+        });
+      }
     }
 
     return NextResponse.json(matches);

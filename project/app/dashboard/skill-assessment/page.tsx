@@ -41,7 +41,8 @@ export default function SkillAssessmentPage() {
 
   type QA = { question: string; options: string[]; correctIndex: number };
 
-  const getQuestionsForSkill = (name: string): QA[] => {
+  // legacy fallback if AI generation fails
+  const getStaticQuestionsForSkill = (name: string): QA[] => {
     const s = name.toLowerCase();
 
     if (/\b(py|python)\b/.test(s)) {
@@ -164,14 +165,35 @@ export default function SkillAssessmentPage() {
     ];
   };
 
-  const questions = useMemo(() => (skill ? getQuestionsForSkill(skill.name) : []), [skill]);
+  const [questionsState, setQuestionsState] = useState<QA[]>([]);
+  const questions = useMemo(() => questionsState, [questionsState]);
+
+  useEffect(() => {
+    if (!skill) return;
+    const fetchQs = async () => {
+      try {
+        const res = await fetch(`/api/generate-questions?skill=${encodeURIComponent(skill.name)}`);
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          setQuestionsState(data as QA[]);
+        } else {
+          setQuestionsState(getStaticQuestionsForSkill(skill.name));
+        }
+      } catch (e) {
+        console.error('AI question fetch failed', e);
+        setQuestionsState(getStaticQuestionsForSkill(skill.name));
+      }
+    };
+    setQuestionsState([]);
+    void fetchQs();
+  }, [skill]);
 
   useEffect(() => {
     setAnswers((prev) => {
-      if (prev.length === questions.length) return prev;
-      return new Array(questions.length).fill(-1);
+      if (prev.length === questionsState.length) return prev;
+      return new Array(questionsState.length).fill(-1);
     });
-  }, [questions.length]);
+  }, [questionsState.length]);
 
   const handleAnswer = (idx: number, value: number) => {
     setAnswers((a) => {
@@ -221,6 +243,7 @@ export default function SkillAssessmentPage() {
   if (authLoading || loading) return <div className="min-h-[40vh] flex items-center justify-center">Loading...</div>;
   if (error) return <Card className="p-6 bg-destructive/10 border-destructive/20"><p className="text-destructive">{error}</p></Card>;
   if (!skill) return <Card className="p-6"><p>Skill not found.</p></Card>;
+  if (!skill || questionsState.length === 0) return <div className="min-h-[40vh] flex items-center justify-center"><div className="w-10 h-10 border-4 border-skillswap-200 border-t-skillswap-500 rounded-full animate-spin" /><p className="ml-4">Generating questions…</p></div>;
 
   return (
     <div className="space-y-6 max-w-3xl">

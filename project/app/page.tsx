@@ -41,7 +41,7 @@ export default function Home() {
   const [error, setError] = useState('');
 
   const [meProfile, setMeProfile] = useState<PublicProfile | null>(null);
-  const [meSettings, setMeSettings] = useState<Pick<UserSettings, 'avatar_url' | 'headline' | 'current_title' | 'current_company' | 'location'> | null>(null);
+  const [meSettings, setMeSettings] = useState<Pick<UserSettings, 'avatar_url' | 'headline' | 'current_title' | 'current_company'> | null>(null);
 
   const [feed, setFeed] = useState<FeedOwner[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -97,7 +97,11 @@ export default function Home() {
       }
       // Validate UUIDs to avoid passing dev/sample ids to Supabase which expects UUIDs
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-      const allTeacherIds = Array.from(new Set(matchedSwaps.map((m: any) => m.teacher_id))).filter(Boolean);
+      const allTeacherIds = Array.from(new Set(
+        matchedSwaps
+          .filter((m: any) => !m.teacher || !m.teacher.full_name)
+          .map((m: any) => m.teacher_id)
+      )).filter(Boolean);
       const allTeachSkillIds = Array.from(new Set(matchedSwaps.map((m: any) => m.teach_skill_id))).filter(Boolean);
 
       const teacherIds = allTeacherIds.filter((id) => uuidRegex.test(id)).slice(0, 200);
@@ -105,7 +109,11 @@ export default function Home() {
 
       // If there are no valid UUIDs to query, construct details locally from matchedSwaps
       if (teacherIds.length === 0 && teachSkillIds.length === 0) {
-        const details = (matchedSwaps || []).map((m: any) => ({ ...m, teacher: null, teachSkill: null }));
+        const details = (matchedSwaps || []).map((m: any) => ({
+          ...m,
+          teacher: m.teacher_id ? { full_name: m.teacher_id, bio: '' } : null,
+          teachSkill: null,
+        }));
         setMatchedDetails(details);
         return;
       }
@@ -127,7 +135,7 @@ export default function Home() {
 
         const details = (matchedSwaps || []).map((m: any) => ({
           ...m,
-          teacher: profilesMap[m.teacher_id] || null,
+          teacher: m.teacher || profilesMap[m.teacher_id] || null,
           teachSkill: skillsMap[m.teach_skill_id] || null,
         }));
 
@@ -135,7 +143,11 @@ export default function Home() {
       } catch (err) {
         console.error('Failed to load matched details', err);
         // Fallback: don't crash, show basic matched items
-        const details = (matchedSwaps || []).map((m: any) => ({ ...m, teacher: null, teachSkill: null }));
+        const details = (matchedSwaps || []).map((m: any) => ({
+          ...m,
+          teacher: m.teacher_id ? { full_name: m.teacher_id, bio: '' } : null,
+          teachSkill: null,
+        }));
         setMatchedDetails(details);
       }
     };
@@ -553,7 +565,6 @@ export default function Home() {
                   <p className="text-sm text-skillswap-600">
                     {meSettings?.headline || meSettings?.current_title || (user?.user_metadata?.role as string) || 'Complete your profile to get better matches'}
                   </p>
-                  {meSettings?.location && <p className="mt-2 text-xs text-skillswap-500">{meSettings.location}</p>}
                 </div>
               </div>
             
@@ -590,12 +601,12 @@ export default function Home() {
                         <div className="flex items-start gap-3">
                           <div className="w-12 h-12 rounded-full overflow-hidden">
                             <Avatar className="h-12 w-12">
-                              <AvatarFallback>{(m.teacher?.full_name || 'M').slice(0, 1)}</AvatarFallback>
+                              <AvatarFallback>{((m.teacher?.full_name || m.teacher_id || 'M').slice(0, 1))}</AvatarFallback>
                             </Avatar>
                           </div>
                           <div>
-                            <div className="font-semibold text-sm text-skillswap-800">{m.teacher?.full_name || 'SkillSwap member'}</div>
-                            <p className="text-xs text-skillswap-600 mt-1">{m.teacher?.bio || 'SkillSwap member'}</p>
+                            <div className="font-semibold text-sm text-skillswap-800">{m.teacher?.full_name || m.teacher_id || 'SkillSwap member'}</div>
+                            <p className="text-xs text-skillswap-600 mt-1">{m.teacher?.bio || m.teacher_id || 'SkillSwap member'}</p>
                           </div>
                         </div>
                         <div className="text-xs text-skillswap-500">{m.created_at ? new Date(m.created_at).toLocaleString() : ''}</div>
@@ -703,12 +714,12 @@ export default function Home() {
 
                       <div className="flex-1">
                         <div className="flex items-center justify-between">
-                          <h3 className="font-semibold text-skillswap-800">{g.owner.profile?.full_name || 'SkillSwap member'}</h3>
+                          <h3 className="font-semibold text-skillswap-800">{g.owner.profile?.full_name || g.owner.id || 'SkillSwap member'}</h3>
                           <div className="text-xs text-skillswap-500">
                             {g.ts ? new Date(g.ts).toLocaleString() : ''}
                           </div>
                         </div>
-                        <p className="text-sm text-skillswap-600">{g.owner.settings?.headline || g.owner.profile?.bio || 'SkillSwap member'}</p>
+                        <p className="text-sm text-skillswap-600">{g.owner.settings?.headline || g.owner.profile?.bio || g.owner.id || 'SkillSwap member'}</p>
 
                         <div className="mt-3 text-sm text-skillswap-700">
                           <p className="font-medium text-skillswap-800">Skills</p>

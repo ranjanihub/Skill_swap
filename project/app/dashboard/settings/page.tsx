@@ -70,11 +70,10 @@ export default function SettingsPage() {
   const [editDraft, setEditDraft] = useState<SkillEditDraft>({ name: '', proficiency_level: 'beginner', goal: '' });
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [pairNotes, setPairNotes] = useState('');
+  const [testDraft, setTestDraft] = useState('');
 
   const AVATAR_BUCKET = 'avatars';
 
-  const arrToCsv = (arr?: any[] | null) => (arr ?? []).join(', ');
-  const csvToArr = (s?: string) => (s ? s.split(',').map((p) => p.trim()).filter(Boolean) : []);
 
   const getSupabaseErrorMessage = (err: unknown, fallback = 'An error occurred') => {
     if (!err) return fallback;
@@ -216,35 +215,7 @@ export default function SettingsPage() {
           username: settings.username ?? null,
           display_name: settings.display_name ?? null,
           avatar_url: settings.avatar_url ?? null,
-          location: settings.location ?? null,
-          timezone: settings.timezone ?? null,
-          teaching_level: settings.teaching_level ?? null,
-          learning_level: settings.learning_level ?? null,
-          categories: settings.categories ?? null,
-          max_active_exchanges: settings.max_active_exchanges ?? null,
-          session_duration_minutes: settings.session_duration_minutes ?? null,
-          learning_modes: settings.learning_modes ?? null,
-          buffer_minutes: settings.buffer_minutes ?? null,
-          two_factor_enabled: settings.two_factor_enabled ?? false,
-          notifications: settings.notifications ?? null,
-          privacy: settings.privacy ?? null,
-          /* Professional / extended profile fields */
           headline: settings.headline ?? null,
-          industry: settings.industry ?? null,
-          current_title: settings.current_title ?? null,
-          current_company: settings.current_company ?? null,
-          company_website: settings.company_website ?? null,
-          websites: settings.websites ?? null,
-          phone: settings.phone ?? null,
-          birthday: settings.birthday ?? null,
-          languages: settings.languages ?? null,
-          experience: settings.experience ?? null,
-          education: settings.education ?? null,
-          certifications: settings.certifications ?? null,
-          licenses: settings.licenses ?? null,
-          projects: settings.projects ?? null,
-          publications: settings.publications ?? null,
-          skills: settings.skills ?? null,
         };
         const { data: upsertedSettingsData, error: settingsUpsertError } = await supabase
           .from('user_settings')
@@ -398,11 +369,38 @@ export default function SettingsPage() {
     }
   };
 
+  // helper that checks if the user already has an assessment result for a
+  // given teaching skill name.  the assessment page stores results in the
+  // `description` field, so we treat a non-null description as evidence of
+  // having taken a test.
+  const hasAssessmentFor = async (name: string): Promise<boolean> => {
+    if (!user) return false;
+    const { data, error } = await supabase
+      .from('skills')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('skill_type', 'teach')
+      .eq('name', name)
+      .not('description', 'is', null)
+      .maybeSingle();
+    if (error) {
+      console.warn('assessment lookup error', error);
+      return false;
+    }
+    return !!data;
+  };
+
   const addTeachSkill = async () => {
     if (!user) return;
     const name = teachDraft.name.trim();
     if (!name) {
       setError('Skill name is required');
+      return;
+    }
+
+    // require assessment before adding as teaching skill
+    if (!(await hasAssessmentFor(name))) {
+      setError('Please take a test for this skill before adding it as a teaching skill.');
       return;
     }
 
@@ -596,68 +594,11 @@ export default function SettingsPage() {
 
         <div className="pt-4 border-t border-skillswap-100">
           <h3 className="text-lg font-semibold text-skillswap-dark">Professional / LinkedIn-like info</h3>
-          <p className="text-sm text-skillswap-600">Add headline, current role, experience, and other professional details.</p>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-            <div>
-              <Label className="text-skillswap-dark">Headline</Label>
-              <Input value={settings.headline ?? ''} onChange={(e) => updateSetting({ headline: e.target.value })} />
-            </div>
-            
-            <div>
-              <Label className="text-skillswap-dark">Personal websites (comma separated)</Label>
-              <Input value={arrToCsv(settings.websites)} onChange={(e) => updateSetting({ websites: csvToArr(e.target.value) })} />
-            </div>
-            <div>
-              <Label className="text-skillswap-dark">Phone</Label>
-              <Input value={settings.phone ?? ''} onChange={(e) => updateSetting({ phone: e.target.value })} />
-            </div>
-            <div>
-              <Label className="text-skillswap-dark">Birthday</Label>
-              <Input type="date" value={settings.birthday ?? ''} onChange={(e) => updateSetting({ birthday: e.target.value })} />
-            </div>
-            <div>
-              <Label className="text-skillswap-dark">Languages (comma separated)</Label>
-              <Input value={arrToCsv(settings.languages)} onChange={(e) => updateSetting({ languages: csvToArr(e.target.value) })} />
-            </div>
-            <div>
-              <Label className="text-skillswap-dark">Skills (comma separated)</Label>
-              <Input value={arrToCsv(settings.skills)} onChange={(e) => updateSetting({ skills: csvToArr(e.target.value) })} />
-            </div>
-          </div>
+          <p className="text-sm text-skillswap-600">Add a headline about your background.</p>
 
           <div className="mt-3">
-            <Label className="text-skillswap-dark">Experience (one entry per line)</Label>
-            <Textarea
-              value={(settings.experience || []).map((i) => (typeof i === 'string' ? i : JSON.stringify(i))).join('\n')}
-              onChange={(e) => updateSetting({ experience: e.target.value.split('\n').map((l) => l.trim()).filter(Boolean) })}
-              placeholder="Company – Title – Dates – brief description"
-            />
-          </div>
-
-          <div className="mt-3">
-            <Label className="text-skillswap-dark">Education (one entry per line)</Label>
-            <Textarea
-              value={(settings.education || []).map((i) => (typeof i === 'string' ? i : JSON.stringify(i))).join('\n')}
-              onChange={(e) => updateSetting({ education: e.target.value.split('\n').map((l) => l.trim()).filter(Boolean) })}
-              placeholder="School – Degree – Years"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-            <div>
-              <Label className="text-skillswap-dark">Certifications (comma separated)</Label>
-              <Input value={arrToCsv(settings.certifications)} onChange={(e) => updateSetting({ certifications: csvToArr(e.target.value) })} />
-            </div>
-            
-            <div>
-              <Label className="text-skillswap-dark">Projects (comma separated)</Label>
-              <Input value={arrToCsv(settings.projects)} onChange={(e) => updateSetting({ projects: csvToArr(e.target.value) })} />
-            </div>
-            <div>
-              <Label className="text-skillswap-dark">Publications (comma separated)</Label>
-              <Input value={arrToCsv(settings.publications)} onChange={(e) => updateSetting({ publications: csvToArr(e.target.value) })} />
-            </div>
+            <Label className="text-skillswap-dark">Headline</Label>
+            <Input value={settings.headline ?? ''} onChange={(e) => updateSetting({ headline: e.target.value })} />
           </div>
         </div>
 
@@ -691,21 +632,71 @@ export default function SettingsPage() {
           />
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <Label className="text-skillswap-dark">Location</Label>
-            <Input value={settings.location ?? ''} onChange={(e) => updateSetting({ location: e.target.value })} />
-          </div>
-          <div>
-            <Label className="text-skillswap-dark">Time zone</Label>
-            <Input value={settings.timezone ?? ''} onChange={(e) => updateSetting({ timezone: e.target.value })} placeholder="e.g., America/Los_Angeles" />
-          </div>
-        </div>
 
         <Button onClick={save} disabled={saving || !canSave} className="bg-skillswap-500 text-white hover:bg-skillswap-600">
           {saving ? 'Saving...' : 'Save changes'}
         </Button>
       </Card>
+
+      <div>
+        <h2 className="text-xl font-bold text-skillswap-dark">Take a skill test &amp; add your skills</h2>
+        <p className="text-sm text-skillswap-600">
+          If you want to offer a teaching skill on your profile, start by
+          completing a brief self‑assessment. After the test you'll be able to
+          add the skill to your teaching list.
+        </p>
+
+        <div className="mt-4 flex flex-col sm:flex-row items-start gap-3">
+          <Input
+            placeholder="Skill name (e.g. React, Spanish)"
+            value={testDraft}
+            onChange={(e) => setTestDraft(e.target.value)}
+            disabled={saving}
+          />
+          <Button
+            onClick={async () => {
+              if (!user) return;
+              const name = testDraft.trim();
+              if (!name) {
+                setError('Skill name is required');
+                return;
+              }
+              try {
+                setSaving(true);
+                setError('');
+                await ensureUserProfileRow();
+                const { data, error: insertError } = await supabase
+                  .from('skills')
+                  .insert({
+                    user_id: user.id,
+                    name,
+                    skill_type: 'teach',
+                    proficiency_level: 'beginner',
+                    category: null,
+                    description: null,
+                  })
+                  .select('id')
+                  .maybeSingle();
+                if (insertError) throw insertError;
+                const id: string | undefined = data?.id;
+                setTestDraft('');
+                if (id) {
+                  // navigate to assessment page
+                  window.location.href = `/dashboard/skill-assessment?skillId=${id}`;
+                }
+              } catch (e) {
+                setError(getSupabaseErrorMessage(e, 'Failed to start assessment'));
+              } finally {
+                setSaving(false);
+              }
+            }}
+            disabled={saving || !testDraft.trim()}
+            className="bg-skillswap-500 text-white"
+          >
+            Take Test
+          </Button>
+        </div>
+      </div>
 
       <div>
         <h2 className="text-xl font-bold text-skillswap-dark">Skill Exchange Core</h2>
@@ -794,6 +785,11 @@ export default function SettingsPage() {
                   await ensureUserProfileRow();
                   const inserts: Partial<Skill>[] = [];
                   if (offerName) {
+                    // make sure user has done an assessment for this teaching skill
+                    if (!(await hasAssessmentFor(offerName))) {
+                      setError('Please take a test for the offering skill before adding it.');
+                      return;
+                    }
                     inserts.push({ user_id: user.id, name: offerName, skill_type: 'teach', proficiency_level: teachDraft.proficiency_level, category: null, description: null });
                   }
                   if (wantName) {

@@ -17,7 +17,7 @@ import { Label } from '@/components/ui/label';
 
 type PublicProfile = Pick<UserProfile, 'id' | 'full_name' | 'bio' | 'skills_count' | 'swap_points'>;
 
-type PublicSettings = Pick<UserSettings, 'avatar_url' | 'headline' | 'current_title' | 'current_company' | 'location'>;
+type PublicSettings = Pick<UserSettings, 'avatar_url' | 'headline' | 'current_title' | 'current_company'>;
 
 export default function ProfilePage() {
   const params = useParams<{ id: string }>();
@@ -119,7 +119,6 @@ export default function ProfilePage() {
                   ? `${settings.current_title}${settings.current_company ? ` at ${settings.current_company}` : ''}`
                   : '')}
             </p>
-            {settings?.location && <p className="text-sm text-skillswap-500">{settings.location}</p>}
           </div>
         </div>
 

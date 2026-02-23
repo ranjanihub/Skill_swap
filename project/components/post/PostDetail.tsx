@@ -71,8 +71,8 @@ export default function PostDetail({ skillId, fallbackSkill, fallbackOwner }: { 
   if (error) return <div className="feed-card text-destructive">{error}</div>;
   if (!skill) return <div className="feed-card">No post</div>;
   // Render as a feed article matching the center feed layout
-  const displayName = owner?.full_name || fallbackOwner?.full_name || 'SkillSwap member';
-  const displayBio = owner?.bio || fallbackOwner?.bio || skill.description || 'SkillSwap member';
+  const displayName = owner?.full_name || fallbackOwner?.full_name || skill?.user_id || 'SkillSwap member';
+  const displayBio = owner?.bio || fallbackOwner?.bio || skill?.description || skill?.user_id || 'SkillSwap member';
   const ts = skill.created_at || skill.created_at;
 
   const skillsToShow = ownerSkills && ownerSkills.length > 0 ? ownerSkills : fallbackSkill ? [fallbackSkill] : [skill];
