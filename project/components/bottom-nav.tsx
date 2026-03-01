@@ -1,7 +1,7 @@
 "use client";
 
 import Link from 'next/link';
-import { Home, Users, CalendarDays, Bell, UserCircle } from 'lucide-react';
+import { Home, Users, CalendarDays, MessageSquare, UserCircle } from 'lucide-react';
 
 export default function BottomNav() {
   return (
@@ -24,9 +24,9 @@ export default function BottomNav() {
         <span className="text-[11px]">Calender</span>
       </Link>
 
-      <Link className="bottom-nav-item" aria-label="Notification" title="Notification" href="/notifications">
-        <Bell className="h-5 w-5" />
-        <span className="text-[11px]">Notification</span>
+      <Link className="bottom-nav-item" aria-label="Messages" title="Messages" href="/messages">
+        <MessageSquare className="h-5 w-5" />
+        <span className="text-[11px]">Messages</span>
       </Link>
 
       <Link className="bottom-nav-item" aria-label="Profile" title="Profile" href="/dashboard/settings">
