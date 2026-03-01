@@ -318,12 +318,12 @@ export default function NetworkPage() {
 
           <div className="flex items-center gap-2 flex-shrink-0">
             <button
-              aria-label="Messages"
-              title="Messages"
-              onClick={() => router.push('/messages')}
+              aria-label="Notifications"
+              title="Notifications"
+              onClick={() => router.push('/notifications')}
               className="h-10 w-10 rounded-full bg-white flex items-center justify-center shadow-sm"
             >
-              <MessageSquare className="h-5 w-5 text-skillswap-600" />
+              <Bell className="h-5 w-5 text-skillswap-600" />
             </button>
           </div>
         </div>

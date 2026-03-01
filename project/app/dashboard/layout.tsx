@@ -139,10 +139,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               variant="ghost"
               size="icon"
               className="text-skillswap-600 hover:bg-skillswap-50"
-              aria-label="Notifications"
-              onClick={() => router.push('/notifications')}
+              aria-label="Messages"
+              onClick={() => router.push('/messages')}
             >
-              <Bell className="h-5 w-5" />
+              <MessageSquare className="h-5 w-5" />
             </Button>
 
             <Button
