@@ -7,6 +7,7 @@ import { Home as HomeIcon, Users, Calendar, Bell, Briefcase, MessageSquare, Sear
 
 import { useAuth } from '@/context/auth-context';
 import { isSupabaseConfigured, Notification, supabase, supabaseConfigError } from '@/lib/supabase';
+import { formatExactDateTime, formatExactDateTimeWithSeconds } from '@/lib/utils';
 
 import AppShell, { type ShellNavItem } from '@/components/app-shell';
 
@@ -66,6 +67,49 @@ export default function NotificationsPage() {
   useEffect(() => {
     if (authLoading) return;
     if (!user) return;
+    if (!isSupabaseConfigured) return;
+
+    const channel = supabase
+      .channel(`notifications-page:${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
+        (payload) => {
+          try {
+            if (payload.eventType === 'INSERT') {
+              const next = payload.new as Notification;
+              setNotifications((prev) => [next, ...prev].slice(0, 50));
+              return;
+            }
+            if (payload.eventType === 'UPDATE') {
+              const next = payload.new as Notification;
+              setNotifications((prev) => prev.map((n) => (n.id === next.id ? next : n)));
+              return;
+            }
+            if (payload.eventType === 'DELETE') {
+              const oldRow = payload.old as { id?: string };
+              if (!oldRow?.id) return;
+              setNotifications((prev) => prev.filter((n) => n.id !== oldRow.id));
+            }
+          } catch (e) {
+            console.warn('notifications realtime handler failed', e);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      try {
+        void supabase.removeChannel(channel);
+      } catch {
+        // ignore
+      }
+    };
+  }, [authLoading, user]);
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) return;
 
     if (!isSupabaseConfigured) {
       setError(configError || supabaseConfigError || 'Supabase is not configured');
@@ -120,12 +164,12 @@ export default function NotificationsPage() {
         { href: '/dashboard/settings', label: 'Settings', icon: UserCircle },
       ]}
       headerLeft={
-        <div className="w-full flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full overflow-hidden flex-shrink-0">
-            <Image src="/SkillSwap_Logo.jpg" alt="SkillSwap" width={36} height={36} className="object-cover" />
+        <div className="w-full flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
+            <Image src="/SkillSwap_Logo.jpg" alt="SkillSwap" width={40} height={40} className="object-cover" />
           </div>
-          <div className="flex-1">
-            <div className="relative">
+          <div className="flex-1 min-w-0 flex justify-center">
+            <div className="w-full max-w-2xl relative">
               <input
                 aria-label="Search swaps"
                 placeholder="Search Swaps"
@@ -136,14 +180,16 @@ export default function NotificationsPage() {
               <Search className="absolute left-3 top-2.5 h-5 w-5 text-skillswap-400" />
             </div>
           </div>
-          <button
-            aria-label="Messages"
-            title="Messages"
-            onClick={() => router.push('/messages')}
-            className="w-9 h-9 rounded-full bg-white flex items-center justify-center shadow-sm"
-          >
-            <MessageSquare className="h-5 w-5 text-skillswap-600" />
-          </button>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              aria-label="Messages"
+              title="Messages"
+              onClick={() => router.push('/messages')}
+              className="h-10 w-10 rounded-full bg-white flex items-center justify-center shadow-sm"
+            >
+              <MessageSquare className="h-5 w-5 text-skillswap-600" />
+            </button>
+          </div>
         </div>
       }
     >
@@ -175,6 +221,13 @@ export default function NotificationsPage() {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-skillswap-800">{notifTitle(n)}</p>
                         <p className="mt-1 text-sm text-skillswap-600">{notifBody(n)}</p>
+                        <time
+                          className="mt-2 block text-xs text-skillswap-500"
+                          dateTime={n.created_at}
+                          title={formatExactDateTimeWithSeconds(n.created_at)}
+                        >
+                          {formatExactDateTime(n.created_at)}
+                        </time>
                       </div>
                       {!n.read && (
                         <span

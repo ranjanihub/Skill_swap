@@ -9,6 +9,7 @@ import {
   supabaseConfigError,
   Skill,
   UserProfile,
+  SkillSwapSession,
 } from '@/lib/supabase';
 import { UserSettings } from '@/lib/supabase';
 import { Switch } from '@/components/ui/switch';
@@ -72,7 +73,26 @@ export default function SettingsPage() {
   const [pairNotes, setPairNotes] = useState('');
   const [testDraft, setTestDraft] = useState('');
 
+  // Customize Notifications (skill-based)
+  const [notifSkillDraft, setNotifSkillDraft] = useState('');
+  const [notifSkills, setNotifSkills] = useState<string[]>([]);
+  const [notifSaving, setNotifSaving] = useState(false);
+  const [notifSuccess, setNotifSuccess] = useState('');
+  const [notifError, setNotifError] = useState('');
+
+  // Raise Ticket
+  const [recentSwapPosts, setRecentSwapPosts] = useState<Array<{ postId: string; label: string; ownerId: string | null }>>([]);
+  const [ticketPostRef, setTicketPostRef] = useState('');
+  const [ticketDescription, setTicketDescription] = useState('');
+  const [ticketEvidenceUrl, setTicketEvidenceUrl] = useState('');
+  const [ticketEvidenceFile, setTicketEvidenceFile] = useState<File | null>(null);
+  const [ticketSubmitting, setTicketSubmitting] = useState(false);
+  const [ticketSuccess, setTicketSuccess] = useState('');
+  const [ticketError, setTicketError] = useState('');
+  const [recentPostOwnerBySkillId, setRecentPostOwnerBySkillId] = useState<Record<string, string>>({});
+
   const AVATAR_BUCKET = 'avatars';
+  const TICKET_EVIDENCE_BUCKET = 'ticket-evidence';
 
 
   const getSupabaseErrorMessage = (err: unknown, fallback = 'An error occurred') => {
@@ -164,6 +184,87 @@ export default function SettingsPage() {
 
         if (skillsError) throw skillsError;
         setSkills((skillsData || []) as Skill[]);
+
+        // Load notification preferences
+        try {
+          const { data: prefsData, error: prefsError } = await supabase
+            .from('notification_skill_preferences')
+            .select('skill_name')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false })
+            .limit(50);
+          if (!prefsError) {
+            const list = (prefsData || [])
+              .map((p: any) => String(p.skill_name || '').trim())
+              .filter(Boolean);
+            setNotifSkills(Array.from(new Set(list)));
+          }
+        } catch {
+          // ignore (table might not exist yet)
+        }
+
+        // Load recent swap sessions to allow tagging a related swap post
+        try {
+          const { data: sessionsData, error: sessionsError } = await supabase
+            .from('skill_swap_sessions')
+            .select('id, user_a_id, user_b_id, skill_a_id, skill_b_id, status, created_at')
+            .order('created_at', { ascending: false })
+            .limit(20);
+
+          if (sessionsError) throw sessionsError;
+
+          const sessions = (sessionsData || []) as Partial<SkillSwapSession>[];
+          const idRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+          const skillIds = Array.from(
+            new Set(
+              sessions
+                .flatMap((s) => [s.skill_a_id, s.skill_b_id])
+                .filter((v): v is string => Boolean(v) && idRegex.test(String(v)))
+            )
+          ).slice(0, 100);
+
+          if (skillIds.length === 0) {
+            setRecentSwapPosts([]);
+          } else {
+            const { data: sessionSkills, error: sessionSkillsError } = await supabase
+              .from('skills')
+              .select('id, name, skill_type, user_id')
+              .in('id', skillIds);
+            if (sessionSkillsError) throw sessionSkillsError;
+
+            const ownerIds = Array.from(new Set((sessionSkills || []).map((s: any) => s.user_id).filter(Boolean))).slice(0, 200);
+            let ownersMap: Record<string, string> = {};
+            if (ownerIds.length > 0) {
+              const { data: ownerProfiles } = await supabase
+                .from('user_profiles')
+                .select('id, full_name')
+                .in('id', ownerIds);
+              (ownerProfiles || []).forEach((p: any) => {
+                ownersMap[p.id] = p.full_name || p.id;
+              });
+            }
+
+            const bySkillId: Record<string, string> = {};
+            (sessionSkills || []).forEach((s: any) => {
+              if (s?.id && s?.user_id) bySkillId[s.id] = s.user_id;
+            });
+            setRecentPostOwnerBySkillId(bySkillId);
+
+            const options = (sessionSkills || []).map((s: any) => {
+              const ownerName = ownersMap[s.user_id] || s.user_id || 'SkillSwap member';
+              const typeLabel = s.skill_type === 'learn' ? 'Learns' : 'Teaches';
+              return {
+                postId: s.id,
+                ownerId: s.user_id || null,
+                label: `${typeLabel}: ${s.name} (${ownerName})`,
+              };
+            });
+            setRecentSwapPosts(options);
+          }
+        } catch (e) {
+          // best-effort; settings page should still render
+          setRecentSwapPosts([]);
+        }
       } catch (err) {
         const msg = getSupabaseErrorMessage(err, 'Failed to load profile settings');
         if (isMissingTableSchemaCacheError(msg)) {
@@ -180,6 +281,171 @@ export default function SettingsPage() {
 
     void run();
   }, [authLoading, user]);
+
+  const normalizeSkillLabel = (s: string) => s.trim();
+  const normalizeSkillKey = (s: string) => s.trim().toLowerCase();
+
+  const addNotifSkill = () => {
+    const name = normalizeSkillLabel(notifSkillDraft);
+    const key = normalizeSkillKey(notifSkillDraft);
+    if (!name || !key) return;
+    setNotifSkills((prev) => {
+      const existingKeys = new Set(prev.map((s) => normalizeSkillKey(s)));
+      if (existingKeys.has(key)) return prev;
+      return [...prev, name].filter(Boolean);
+    });
+    setNotifSkillDraft('');
+  };
+
+  const removeNotifSkill = (name: string) => {
+    const key = normalizeSkillKey(name);
+    setNotifSkills((prev) => prev.filter((s) => normalizeSkillKey(s) !== key));
+  };
+
+  const saveNotifPrefs = async () => {
+    if (!user) return;
+    setNotifError('');
+    setNotifSuccess('');
+    try {
+      setNotifSaving(true);
+
+      const cleaned = (() => {
+        const byKey = new Map<string, string>();
+        for (const raw of notifSkills || []) {
+          const label = normalizeSkillLabel(raw);
+          const key = normalizeSkillKey(raw);
+          if (!label || !key) continue;
+          if (!byKey.has(key)) byKey.set(key, label);
+        }
+        return Array.from(byKey.values()).slice(0, 25);
+      })();
+
+      // Replace-all for simplicity
+      const { error: delErr } = await supabase
+        .from('notification_skill_preferences')
+        .delete()
+        .eq('user_id', user.id);
+      if (delErr) throw delErr;
+
+      if (cleaned.length > 0) {
+        const rows = cleaned.map((skill_name) => ({
+          user_id: user.id,
+          skill_name,
+          // keep normalized column consistent with the DB normalize function
+          skill_name_normalized: normalizeSkillKey(skill_name),
+        }));
+        const { error: insErr } = await supabase
+          .from('notification_skill_preferences')
+          .insert(rows);
+        if (insErr) throw insErr;
+      }
+
+      setNotifSuccess('Notification preferences saved.');
+    } catch (e) {
+      const msg = getSupabaseErrorMessage(e, 'Failed to save notification preferences');
+      if (isMissingTableSchemaCacheError(msg)) {
+        setNotifError(
+          "Notification preferences aren't set up yet. Apply `supabase/migrations/20260228153000_add_notification_skill_preferences.sql` on your Supabase DB, reload schema cache, then try again."
+        );
+      } else {
+        setNotifError(msg);
+      }
+    } finally {
+      setNotifSaving(false);
+    }
+  };
+
+  const parsePostIdFromRef = (ref: string) => {
+    const raw = (ref || '').trim();
+    if (!raw) return '';
+    // Accept full URL or path like /post/<id>
+    const match = raw.match(/\/post\/([0-9a-f\-]{36})/i);
+    if (match?.[1]) return match[1];
+    return raw;
+  };
+
+  const raiseTicket = async () => {
+    if (!user) return;
+    setTicketError('');
+    setTicketSuccess('');
+
+    const postId = parsePostIdFromRef(ticketPostRef);
+    const description = ticketDescription.trim();
+    if (!postId) {
+      setTicketError('Please tag the related swap post (paste a /post/… link or ID).');
+      return;
+    }
+    if (!description) {
+      setTicketError('Please describe the issue.');
+      return;
+    }
+
+    try {
+      setTicketSubmitting(true);
+
+      const evidenceUrls: string[] = [];
+      const url = ticketEvidenceUrl.trim();
+      if (url) evidenceUrls.push(url);
+
+      if (ticketEvidenceFile) {
+        const form = new FormData();
+        form.append('file', ticketEvidenceFile);
+        form.append('user_id', user.id);
+        form.append('bucket', TICKET_EVIDENCE_BUCKET);
+
+        const res = await fetch('/api/upload-avatar', { method: 'POST', body: form });
+        const json = await res.json();
+        if (!res.ok) {
+          throw new Error(json?.error || 'Evidence upload failed');
+        }
+        const publicUrl = json?.publicUrl as string | null;
+        if (publicUrl) evidenceUrls.push(publicUrl);
+      }
+
+      // Best-effort accused_id resolution from recent post data
+      let accusedId: string | null = null;
+      if (recentPostOwnerBySkillId[postId]) {
+        accusedId = recentPostOwnerBySkillId[postId];
+      } else {
+        // fallback lookup
+        try {
+          const { data: skillRow } = await supabase.from('skills').select('user_id').eq('id', postId).maybeSingle();
+          if (skillRow?.user_id) accusedId = skillRow.user_id as string;
+        } catch {
+          // ignore
+        }
+      }
+
+      const { error: insertError } = await supabase.from('moderation_tickets').insert({
+        reporter_id: user.id,
+        accused_id: accusedId,
+        skill_id: postId,
+        session_id: null,
+        description,
+        evidence_urls: evidenceUrls.length > 0 ? evidenceUrls : null,
+        status: 'open',
+      });
+
+      if (insertError) throw insertError;
+
+      setTicketSuccess('Ticket submitted for review.');
+      setTicketPostRef('');
+      setTicketDescription('');
+      setTicketEvidenceUrl('');
+      setTicketEvidenceFile(null);
+    } catch (e) {
+      const msg = getSupabaseErrorMessage(e, 'Failed to submit ticket');
+      if (isMissingTableSchemaCacheError(msg)) {
+        setTicketError(
+          "Tickets table isn't set up yet. Apply the migration `supabase/migrations/20260228140000_create_moderation_tickets.sql` on your Supabase DB, reload schema cache, then try again."
+        );
+      } else {
+        setTicketError(msg);
+      }
+    } finally {
+      setTicketSubmitting(false);
+    }
+  };
 
   const save = async () => {
     if (!user) return;
@@ -638,6 +904,69 @@ export default function SettingsPage() {
         </Button>
       </Card>
 
+      <Card className="p-6 bg-white border-2 border-skillswap-200 space-y-4">
+        <div>
+          <h2 className="text-xl font-bold text-skillswap-dark">Customize Notifications</h2>
+          <p className="text-sm text-skillswap-600">Choose which skills you want to get notified about when someone creates a related swap post.</p>
+        </div>
+
+        {(notifError || notifSuccess) && (
+          <div className={notifError ? 'p-3 rounded-md bg-destructive/10 border border-destructive/20' : 'p-3 rounded-md bg-secondary/40 border border-secondary'}>
+            <p className={notifError ? 'text-sm text-destructive' : 'text-sm text-foreground'}>{notifError || notifSuccess}</p>
+          </div>
+        )}
+
+        <div>
+          <Label className="text-skillswap-dark">Add a skill</Label>
+          <div className="mt-2 flex gap-2">
+            <Input
+              value={notifSkillDraft}
+              onChange={(e) => setNotifSkillDraft(e.target.value)}
+              placeholder="e.g., React, UI/UX, Next.js"
+              disabled={notifSaving}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  addNotifSkill();
+                }
+              }}
+            />
+            <Button type="button" variant="outline" onClick={addNotifSkill} disabled={notifSaving || !notifSkillDraft.trim()}>
+              Add
+            </Button>
+          </div>
+        </div>
+
+        <div>
+          <Label className="text-skillswap-dark">Selected skills</Label>
+          {notifSkills.length === 0 ? (
+            <p className="text-sm text-skillswap-600 mt-2">No skills selected yet.</p>
+          ) : (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {notifSkills.map((s) => (
+                <Badge key={s} variant="secondary" className="flex items-center gap-2">
+                  <span>{s}</span>
+                  <button type="button" onClick={() => removeNotifSkill(s)} disabled={notifSaving} className="text-xs text-skillswap-700">
+                    ×
+                  </button>
+                </Badge>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            onClick={saveNotifPrefs}
+            disabled={notifSaving}
+            className="bg-skillswap-500 text-white hover:bg-skillswap-600"
+          >
+            {notifSaving ? 'Saving…' : 'Save notification preferences'}
+          </Button>
+        </div>
+      </Card>
+
       <div>
         <h2 className="text-xl font-bold text-skillswap-dark">Take a skill test &amp; add your skills</h2>
         <p className="text-sm text-skillswap-600">
@@ -703,6 +1032,92 @@ export default function SettingsPage() {
         <p className="text-skillswap-600">
           Tell SkillSwap what you can teach and what you want to learn.
         </p>
+      </div>
+
+      <div>
+        <Card className="p-6 bg-white border-2 border-skillswap-200">
+          <h3 className="text-lg font-semibold text-skillswap-dark">Raise Ticket</h3>
+          <p className="text-sm text-skillswap-600 mt-1">Report an issue if a swapper cheats or violates the agreement. Tag the related swap post.</p>
+
+          {(ticketError || ticketSuccess) && (
+            <div className={ticketError ? 'mt-3 p-3 rounded-md bg-destructive/10 border border-destructive/20' : 'mt-3 p-3 rounded-md bg-secondary/40 border border-secondary'}>
+              <p className={ticketError ? 'text-sm text-destructive' : 'text-sm text-foreground'}>{ticketError || ticketSuccess}</p>
+            </div>
+          )}
+
+          <div className="mt-4">
+            <Label className="text-skillswap-dark">Related swap post</Label>
+            {recentSwapPosts.length > 0 ? (
+              <div className="mt-2">
+                <Select
+                  value={''}
+                  onValueChange={(v) => setTicketPostRef(v)}
+                  disabled={ticketSubmitting}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select from recent swaps (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {recentSwapPosts.slice(0, 20).map((p) => (
+                      <SelectItem key={p.postId} value={p.postId}>{p.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
+
+            <div className="mt-2">
+              <Input
+                value={ticketPostRef}
+                onChange={(e) => setTicketPostRef(e.target.value)}
+                placeholder="Paste swap post link like /post/<id> or enter the post ID"
+                disabled={ticketSubmitting}
+              />
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <Label className="text-skillswap-dark">Description</Label>
+            <Textarea
+              value={ticketDescription}
+              onChange={(e) => setTicketDescription(e.target.value)}
+              placeholder="Describe what happened and how it violated the agreement"
+              disabled={ticketSubmitting}
+            />
+          </div>
+
+          <div className="mt-4">
+            <Label className="text-skillswap-dark">Supporting evidence (optional)</Label>
+            <div className="mt-2 space-y-3">
+              <Input
+                value={ticketEvidenceUrl}
+                onChange={(e) => setTicketEvidenceUrl(e.target.value)}
+                placeholder="Evidence link (optional)"
+                disabled={ticketSubmitting}
+              />
+
+              <input
+                type="file"
+                accept="image/*,application/pdf"
+                onChange={(e) => setTicketEvidenceFile(e.target.files?.[0] || null)}
+                disabled={ticketSubmitting}
+                className="file:border-0 file:bg-transparent file:text-sm file:font-medium"
+              />
+              <p className="text-xs text-skillswap-600">Attach a screenshot or PDF if available.</p>
+            </div>
+          </div>
+
+          <div className="mt-4 flex justify-end">
+            <Button
+              type="button"
+              onClick={raiseTicket}
+              disabled={ticketSubmitting}
+              className="bg-skillswap-500 text-white hover:bg-skillswap-600"
+            >
+              {ticketSubmitting ? 'Submitting…' : 'Submit ticket'}
+            </Button>
+          </div>
+        </Card>
       </div>
 
       <div>

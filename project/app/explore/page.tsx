@@ -27,6 +27,7 @@ export default function ExplorePage() {
   const [profilesById, setProfilesById] = useState<Record<string, PublicProfile>>(
     {}
   );
+  const [ratingsByUser, setRatingsByUser] = useState<Record<string, { avg: number; count: number }>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -81,6 +82,25 @@ export default function ExplorePage() {
           map[p.id] = p as PublicProfile;
         });
         setProfilesById(map);
+
+        // Load rating aggregates for these users
+        try {
+          const { data: ratingsData } = await supabase
+            .from('swap_ratings')
+            .select('rated_id, rating')
+            .in('rated_id', userIds);
+          const rmap: Record<string, { avg: number; count: number }> = {};
+          (ratingsData || []).forEach((r: any) => {
+            const id = r.rated_id as string;
+            rmap[id] = rmap[id] || { avg: 0, count: 0 };
+            rmap[id].avg = (rmap[id].avg * rmap[id].count + r.rating) / (rmap[id].count + 1);
+            rmap[id].count += 1;
+          });
+          setRatingsByUser(rmap);
+        } catch (e) {
+          // best-effort
+          setRatingsByUser({});
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Failed to load explore data';
         setError(msg);
@@ -92,6 +112,41 @@ export default function ExplorePage() {
 
     void run();
   }, [authLoading, user, router, skillQuery]);
+
+  // Live-update rating aggregates on new ratings
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) return;
+    if (!isSupabaseConfigured) return;
+
+    const ch = supabase
+      .channel(`explore-ratings-live-${user.id}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'swap_ratings' }, (payload) => {
+        try {
+          const r: any = payload.new;
+          const ratedId = r?.rated_id as string | undefined;
+          const rating = Number(r?.rating);
+          if (!ratedId || !Number.isFinite(rating)) return;
+          setRatingsByUser((prev) => {
+            const cur = prev[ratedId] || { avg: 0, count: 0 };
+            const nextCount = cur.count + 1;
+            const nextAvg = (cur.avg * cur.count + rating) / nextCount;
+            return { ...prev, [ratedId]: { avg: nextAvg, count: nextCount } };
+          });
+        } catch {
+          // ignore
+        }
+      })
+      .subscribe();
+
+    return () => {
+      try {
+        supabase.removeChannel(ch);
+      } catch {
+        // ignore
+      }
+    };
+  }, [authLoading, user?.id]);
 
   const hasResults = skills.length > 0;
 
@@ -186,6 +241,7 @@ export default function ExplorePage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {skills.map((skill) => {
               const owner = profilesById[skill.user_id];
+              const rating = ratingsByUser[skill.user_id];
               return (
                 <Card
                   key={skill.id}
@@ -199,6 +255,9 @@ export default function ExplorePage() {
                       <p className="text-sm text-skillswap-600 mt-1">
                         by {owner?.full_name || 'SkillSwap member'}
                       </p>
+                      {rating ? (
+                        <p className="text-xs text-skillswap-500 mt-1">★ {rating.avg.toFixed(1)} ({rating.count})</p>
+                      ) : null}
                     </div>
 
                     <div className="flex flex-col items-end gap-2">

@@ -18,7 +18,7 @@ import {
   UserProfile,
   ConnectionRequest,
 } from '@/lib/supabase';
-import { cn } from '@/lib/utils';
+import { cn, formatExactDateTime, formatExactDateTimeWithSeconds } from '@/lib/utils';
 import AppShell, { type ShellNavItem } from '@/components/app-shell';
 import AvailabilityPicker from '@/components/calendar/AvailabilityPicker';
 
@@ -587,7 +587,22 @@ export default function ConnectionsPage() {
                           <Badge variant="outline">{c.status}</Badge>
                         </div>
                         <p className="text-sm text-skillswap-600">{c.skills.slice(0,3).map((s) => s.name).join(' • ') || 'No listed skills'}</p>
-                        <p className="text-xs text-skillswap-500 mt-1">{c.lastActivity ? `Last activity ${new Date(c.lastActivity).toLocaleString()}` : 'No recent activity'}</p>
+                        <time
+                          className="text-xs text-skillswap-500 mt-1 block"
+                          dateTime={c.lastActivity || undefined}
+                          title={c.lastActivity ? formatExactDateTimeWithSeconds(c.lastActivity) : undefined}
+                        >
+                          {c.lastActivity ? `Last activity ${formatExactDateTime(c.lastActivity)}` : 'No recent activity'}
+                        </time>
+                        {c.status === 'pending' && c.request?.created_at ? (
+                          <time
+                            className="text-xs text-skillswap-500 mt-1 block"
+                            dateTime={c.request.created_at}
+                            title={formatExactDateTimeWithSeconds(c.request.created_at)}
+                          >
+                            Request created {formatExactDateTime(c.request.created_at)}
+                          </time>
+                        ) : null}
                       </div>
                     </div>
 

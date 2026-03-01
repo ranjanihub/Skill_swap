@@ -82,6 +82,28 @@ export type Notification = {
   created_at: string;
 };
 
+export type SwapRating = {
+  id: string;
+  session_id: string;
+  rater_id: string;
+  rated_id: string;
+  rating: number;
+  created_at: string;
+};
+
+export type ModerationTicket = {
+  id: string;
+  reporter_id: string;
+  accused_id: string | null;
+  skill_id: string | null;
+  session_id: string | null;
+  description: string;
+  evidence_urls: string[] | null;
+  status: 'open' | 'under_review' | 'resolved' | 'rejected';
+  created_at: string;
+  updated_at: string;
+};
+
 export type UserSettings = {
   id: string;
   username?: string | null;

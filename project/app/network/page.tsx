@@ -14,7 +14,7 @@ import {
   UserProfile,
   UserSettings,
 } from '@/lib/supabase';
-import { cn } from '@/lib/utils';
+import { cn, formatExactDateTime, formatExactDateTimeWithSeconds } from '@/lib/utils';
 
 import AppShell, { type ShellNavItem } from '@/components/app-shell';
 
@@ -121,6 +121,107 @@ export default function NetworkPage() {
     void run();
   }, [authLoading, user, configError]);
 
+  // Keep invitations/requests updated automatically
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) return;
+    if (!isSupabaseConfigured) return;
+
+    const upsertAllMyRequest = (req: ConnectionRequest) => {
+      setAllMyRequests((prev) => {
+        const next = [req, ...prev.filter((r) => r.id !== req.id)];
+        next.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        return next;
+      });
+    };
+
+    const removeAllMyRequest = (id: string) => {
+      setAllMyRequests((prev) => prev.filter((r) => r.id !== id));
+    };
+
+    const ensureInvitation = async (req: ConnectionRequest) => {
+      if (req.recipient_id !== user.id) return;
+      if (req.status !== 'pending') return;
+      setInvitations((prev) => {
+        if (prev.some((x) => x.request.id === req.id)) return prev;
+        return prev;
+      });
+
+      const requesterId = req.requester_id;
+      const [{ data: profileData }, { data: settingsData }] = await Promise.all([
+        supabase.from('user_profiles').select('id, full_name, bio').eq('id', requesterId).maybeSingle(),
+        supabase
+          .from('user_settings')
+          .select('id, headline, current_title, current_company, avatar_url')
+          .eq('id', requesterId)
+          .maybeSingle(),
+      ]);
+
+      setInvitations((prev) => {
+        if (prev.some((x) => x.request.id === req.id)) return prev;
+        const next = [
+          {
+            request: req,
+            requesterProfile: (profileData as any) || null,
+            requesterSettings: (settingsData as any) || null,
+          } as InvItem,
+          ...prev,
+        ];
+        return next;
+      });
+    };
+
+    const removeInvitation = (id: string) => {
+      setInvitations((prev) => prev.filter((x) => x.request.id !== id));
+    };
+
+    const channel = supabase
+      .channel(`connection-requests:${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'connection_requests', filter: `recipient_id=eq.${user.id}` },
+        (payload) => {
+          try {
+            if (payload.eventType === 'INSERT') {
+              const req = payload.new as ConnectionRequest;
+              upsertAllMyRequest(req);
+              void ensureInvitation(req);
+              return;
+            }
+
+            if (payload.eventType === 'UPDATE') {
+              const req = payload.new as ConnectionRequest;
+              upsertAllMyRequest(req);
+              if (req.status === 'pending') {
+                void ensureInvitation(req);
+              } else {
+                removeInvitation(req.id);
+              }
+              return;
+            }
+
+            if (payload.eventType === 'DELETE') {
+              const oldRow = payload.old as { id?: string };
+              if (!oldRow?.id) return;
+              removeAllMyRequest(oldRow.id);
+              removeInvitation(oldRow.id);
+            }
+          } catch (e) {
+            console.warn('connection_requests realtime handler failed', e);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      try {
+        void supabase.removeChannel(channel);
+      } catch {
+        // ignore
+      }
+    };
+  }, [authLoading, user?.id]);
+
   const connectionsCount = useMemo(() => {
     if (!user) return 0;
     const accepted = allMyRequests.filter((r) => r.status === 'accepted');
@@ -197,12 +298,13 @@ export default function NetworkPage() {
           { href: '/dashboard/settings', label: 'Settings', icon: UserCircle },
       ]}
       headerLeft={
-        <div className="w-full flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full overflow-hidden flex-shrink-0">
-            <Image src="/SkillSwap_Logo.jpg" alt="SkillSwap" width={36} height={36} className="object-cover" />
+        <div className="w-full flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
+            <Image src="/SkillSwap_Logo.jpg" alt="SkillSwap" width={40} height={40} className="object-cover" />
           </div>
-          <div className="flex-1">
-            <div className="relative">
+
+          <div className="flex-1 min-w-0 flex justify-center">
+            <div className="w-full max-w-2xl relative">
               <input
                 aria-label="Search swaps"
                 placeholder="Search Swaps"
@@ -213,14 +315,17 @@ export default function NetworkPage() {
               <Search className="absolute left-3 top-2.5 h-5 w-5 text-skillswap-400" />
             </div>
           </div>
-          <button
-            aria-label="Messages"
-            title="Messages"
-            onClick={() => router.push('/messages')}
-            className="w-9 h-9 rounded-full bg-white flex items-center justify-center shadow-sm"
-          >
-            <MessageSquare className="h-5 w-5 text-skillswap-600" />
-          </button>
+
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              aria-label="Messages"
+              title="Messages"
+              onClick={() => router.push('/messages')}
+              className="h-10 w-10 rounded-full bg-white flex items-center justify-center shadow-sm"
+            >
+              <MessageSquare className="h-5 w-5 text-skillswap-600" />
+            </button>
+          </div>
         </div>
       }
     >
@@ -339,6 +444,13 @@ export default function NetworkPage() {
                             </p>
                             {title && <p className="text-sm text-skillswap-600 truncate mt-1">{title}</p>}
                             <p className="text-xs text-skillswap-500 mt-1">Invited you to connect</p>
+                            <time
+                              className="text-xs text-skillswap-500 mt-1 block"
+                              dateTime={req.created_at}
+                              title={formatExactDateTimeWithSeconds(req.created_at)}
+                            >
+                              {formatExactDateTime(req.created_at)}
+                            </time>
                           </div>
 
                           <div className="flex items-center gap-3">

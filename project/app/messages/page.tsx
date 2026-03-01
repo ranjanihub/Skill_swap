@@ -364,12 +364,12 @@ export default function MessagesPage() {
         { href: '/dashboard/settings', label: 'Settings', icon: UserCircle },
       ]}
       headerLeft={
-        <div className="w-full flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full overflow-hidden flex-shrink-0">
-            <Image src="/SkillSwap_Logo.jpg" alt="SkillSwap" width={36} height={36} className="object-cover" />
+        <div className="w-full flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
+            <Image src="/SkillSwap_Logo.jpg" alt="SkillSwap" width={40} height={40} className="object-cover" />
           </div>
-          <div className="flex-1">
-            <div className="relative">
+          <div className="flex-1 min-w-0 flex justify-center">
+            <div className="w-full max-w-2xl relative">
               <input
                 aria-label="Search swaps"
                 placeholder="Search Swaps"
@@ -380,14 +380,16 @@ export default function MessagesPage() {
               <Search className="absolute left-3 top-2.5 h-5 w-5 text-skillswap-400" />
             </div>
           </div>
-          <button
-            aria-label="Messages"
-            title="Messages"
-            onClick={() => router.push('/messages')}
-            className="w-9 h-9 rounded-full bg-white flex items-center justify-center shadow-sm"
-          >
-            <MessageSquare className="h-5 w-5 text-skillswap-600" />
-          </button>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              aria-label="Messages"
+              title="Messages"
+              onClick={() => router.push('/messages')}
+              className="h-10 w-10 rounded-full bg-white flex items-center justify-center shadow-sm"
+            >
+              <MessageSquare className="h-5 w-5 text-skillswap-600" />
+            </button>
+          </div>
         </div>
       }
     >
@@ -398,7 +400,7 @@ export default function MessagesPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-[360px_1fr_320px] gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-4">
           {/* Left pane */}
           <section className={cn('lg:block', mobileView === 'chat' && 'hidden lg:block')}>
             <Card className="overflow-hidden">
@@ -653,27 +655,6 @@ export default function MessagesPage() {
               )}
             </Card>
           </section>
-
-          {/* Right pane */}
-          <aside className="hidden lg:block">
-            <Card className="overflow-hidden">
-              <div className="aspect-[16/11] bg-skillswap-200" />
-              <div className="p-4 text-sm text-skillswap-600">
-                <div className="flex flex-wrap gap-x-4 gap-y-2">
-                  <span>About</span>
-                  <span>Accessibility</span>
-                  <span>Help Center</span>
-                  <span>Privacy & Terms</span>
-                  <span>Ad Choices</span>
-                  <span>Advertising</span>
-                  <span>Business Services</span>
-                  <span>Get the app</span>
-                  <span>More</span>
-                </div>
-                <p className="mt-4 text-xs text-skillswap-500">SkillSwap © {new Date().getFullYear()}</p>
-              </div>
-            </Card>
-          </aside>
         </div>
       </div>
     </AppShell>

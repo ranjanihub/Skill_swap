@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 
@@ -23,6 +23,7 @@ import {
   ConnectionRequest,
   Notification,
 } from '@/lib/supabase';
+import { formatExactDateTime, formatExactDateTimeWithSeconds } from '@/lib/utils';
 
 type PublicProfile = Pick<UserProfile, 'id' | 'full_name' | 'bio' | 'skills_count' | 'swap_points'>;
 
@@ -63,22 +64,123 @@ export default function Home() {
 
   const [matchedSwaps, setMatchedSwaps] = useState([]);
   const [matchedDetails, setMatchedDetails] = useState<Array<any>>([]);
+  const [ratingsByUser, setRatingsByUser] = useState<Record<string, { avg: number; count: number }>>({});
+  const [sidebarCounts, setSidebarCounts] = useState<{ swaps: number; posted: number }>({ swaps: 0, posted: 0 });
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [selectedPostFallback, setSelectedPostFallback] = useState<any | null>(null);
+  const [showMatchedSwapsCenter, setShowMatchedSwapsCenter] = useState(false);
+  const [copiedShareKey, setCopiedShareKey] = useState<string | null>(null);
+
+  const sharePost = async (postId: string | undefined, label: string, shareKey: string) => {
+    try {
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      const url = postId ? `${origin}/post/${postId}` : `${origin}/`;
+      const title = 'SkillSwap post';
+      const text = label ? `Check out ${label} on SkillSwap` : 'Check out this SkillSwap post';
+
+      // Prefer native share on mobile.
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
+      if (typeof navigator !== 'undefined' && navigator.share) {
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
+        await navigator.share({ title, text, url });
+        return;
+      }
+
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+        setCopiedShareKey(shareKey);
+        window.setTimeout(() => setCopiedShareKey((k) => (k === shareKey ? null : k)), 1500);
+        return;
+      }
+
+      // Last-resort fallback.
+      window.prompt('Copy this link:', url);
+    } catch (e) {
+      console.warn('Share failed', e);
+    }
+  };
+
+  const fetchMatchedSwaps = async () => {
+    try {
+      const response = await fetch('/api/matched-swaps', { cache: 'no-store' });
+      const data = await response.json();
+      setMatchedSwaps(data);
+    } catch (error) {
+      console.error('Failed to fetch matched swaps:', error);
+    }
+  };
+
+  const loadSidebarCounts = async () => {
+    if (!user) return;
+    if (!isSupabaseConfigured) return;
+    try {
+      const [{ count: swapsCount }, { count: postedCount }] = await Promise.all([
+        supabase
+          .from('skill_swap_sessions')
+          .select('id', { count: 'exact', head: true })
+          .or(`user_a_id.eq.${user.id},user_b_id.eq.${user.id}`),
+        supabase
+          .from('skills')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id),
+      ]);
+
+      setSidebarCounts({
+        swaps: typeof swapsCount === 'number' ? swapsCount : 0,
+        posted: typeof postedCount === 'number' ? postedCount : 0,
+      });
+    } catch (e) {
+      console.warn('Failed to load sidebar counts', e);
+    }
+  };
+
+  const scheduleSidebarSync = (ms = 400) => {
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    syncTimerRef.current = setTimeout(() => {
+      void loadSidebarCounts();
+      void fetchMatchedSwaps();
+    }, ms);
+  };
 
   useEffect(() => {
-    const fetchMatchedSwaps = async () => {
+    void fetchMatchedSwaps();
+  }, []);
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) return;
+    void loadSidebarCounts();
+  }, [authLoading, user?.id]);
+
+  // Real-time sidebar synchronization (counts + matches)
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) return;
+    if (!isSupabaseConfigured) return;
+
+    const ch = supabase
+      .channel(`home-sidebar-sync-${user.id}`)
+      // Swaps posted / skill updates can affect matched swaps as well
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'skills' }, () => scheduleSidebarSync())
+      // Swaps (sessions) count changes
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'skill_swap_sessions', filter: `user_a_id=eq.${user.id}` }, () => scheduleSidebarSync())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'skill_swap_sessions', filter: `user_b_id=eq.${user.id}` }, () => scheduleSidebarSync());
+
+    ch.subscribe();
+
+    return () => {
       try {
-        const response = await fetch('/api/matched-swaps');
-        const data = await response.json();
-        setMatchedSwaps(data);
-      } catch (error) {
-        console.error('Failed to fetch matched swaps:', error);
+        if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+        syncTimerRef.current = null;
+        supabase.removeChannel(ch);
+      } catch {
+        // ignore
       }
     };
-
-    fetchMatchedSwaps();
-  }, []);
+  }, [authLoading, user?.id]);
 
   const matchedCounts = useMemo(() => {
     const map: Record<string, number> = {};
@@ -97,11 +199,18 @@ export default function Home() {
       }
       // Validate UUIDs to avoid passing dev/sample ids to Supabase which expects UUIDs
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-      const allTeacherIds = Array.from(new Set(
-        matchedSwaps
-          .filter((m: any) => !m.teacher || !m.teacher.full_name)
-          .map((m: any) => m.teacher_id)
-      )).filter(Boolean);
+      const allTeacherIds = Array.from(
+        new Set(
+          matchedSwaps
+            .filter(
+              (m: any) =>
+                !m.teacher ||
+                !m.teacher.full_name ||
+                (m.teacher_id && m.teacher.full_name === m.teacher_id)
+            )
+            .map((m: any) => m.teacher_id)
+        )
+      ).filter(Boolean);
       const allTeachSkillIds = Array.from(new Set(matchedSwaps.map((m: any) => m.teach_skill_id))).filter(Boolean);
 
       const teacherIds = allTeacherIds.filter((id) => uuidRegex.test(id)).slice(0, 200);
@@ -111,7 +220,9 @@ export default function Home() {
       if (teacherIds.length === 0 && teachSkillIds.length === 0) {
         const details = (matchedSwaps || []).map((m: any) => ({
           ...m,
-          teacher: m.teacher_id ? { full_name: m.teacher_id, bio: '' } : null,
+          // Preserve any author/profile data already attached by the API.
+          // Never override it with an internal id (e.g. dev/sample ids).
+          teacher: m.teacher || null,
           teachSkill: null,
         }));
         setMatchedDetails(details);
@@ -120,22 +231,28 @@ export default function Home() {
 
       try {
         const results = await Promise.all([
-          supabase.from('user_profiles').select('id, full_name').in('id', teacherIds),
+          supabase.from('user_profiles').select('id, full_name, bio').in('id', teacherIds),
+          supabase.from('user_settings').select('id, headline, current_title, current_company').in('id', teacherIds),
           supabase.from('skills').select('id, name, proficiency_level, user_id').in('id', teachSkillIds),
         ]);
 
         const profilesData = results[0].data || [];
-        const teachSkillsData = results[1].data || [];
+        const settingsData = results[1].data || [];
+        const teachSkillsData = results[2].data || [];
 
         const profilesMap: Record<string, any> = {};
         (profilesData || []).forEach((p: any) => (profilesMap[p.id] = p));
+
+        const settingsMap: Record<string, any> = {};
+        (settingsData || []).forEach((s: any) => (settingsMap[s.id] = s));
 
         const skillsMap: Record<string, any> = {};
         (teachSkillsData || []).forEach((s: any) => (skillsMap[s.id] = s));
 
         const details = (matchedSwaps || []).map((m: any) => ({
           ...m,
-          teacher: m.teacher || profilesMap[m.teacher_id] || null,
+          teacher: profilesMap[m.teacher_id] || m.teacher || null,
+          teacherSettings: settingsMap[m.teacher_id] || m.teacher_settings || null,
           teachSkill: skillsMap[m.teach_skill_id] || null,
         }));
 
@@ -145,7 +262,7 @@ export default function Home() {
         // Fallback: don't crash, show basic matched items
         const details = (matchedSwaps || []).map((m: any) => ({
           ...m,
-          teacher: m.teacher_id ? { full_name: m.teacher_id, bio: '' } : null,
+          teacher: m.teacher || null,
           teachSkill: null,
         }));
         setMatchedDetails(details);
@@ -244,6 +361,23 @@ export default function Home() {
           skills: (skillsByOwner[id] || []).slice(0, 3),
         }));
 
+        // load ratings for these owners (avg + count)
+        try {
+          if (ownerIds.length > 0) {
+            const { data: ratingsData } = await supabase.from('swap_ratings').select('rated_id, rating').in('rated_id', ownerIds);
+            const map: Record<string, { avg: number; count: number }> = {};
+            (ratingsData || []).forEach((r: any) => {
+              const id = r.rated_id as string;
+              map[id] = map[id] || { avg: 0, count: 0 };
+              map[id].avg = (map[id].avg * map[id].count + r.rating) / (map[id].count + 1);
+              map[id].count += 1;
+            });
+            setRatingsByUser(map);
+          }
+        } catch (e) {
+          console.warn('Failed to load ratings', e);
+        }
+
         setFeed(owners);
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Failed to load home feed';
@@ -256,6 +390,85 @@ export default function Home() {
 
     void run();
   }, [authLoading, user, configError]);
+
+  // Keep notifications updated automatically
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) return;
+    if (!isSupabaseConfigured) return;
+
+    const ch = supabase
+      .channel(`notifications-live-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
+        (payload) => {
+          try {
+            if (payload.eventType === 'INSERT') {
+              const next = payload.new as Notification;
+              setNotifications((prev) => [next, ...prev].slice(0, 8));
+              return;
+            }
+            if (payload.eventType === 'UPDATE') {
+              const next = payload.new as Notification;
+              setNotifications((prev) => prev.map((n) => (n.id === next.id ? next : n)).slice(0, 8));
+              return;
+            }
+            if (payload.eventType === 'DELETE') {
+              const oldRow = payload.old as { id?: string };
+              if (!oldRow?.id) return;
+              setNotifications((prev) => prev.filter((n) => n.id !== oldRow.id));
+            }
+          } catch {
+            // ignore
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      try {
+        supabase.removeChannel(ch);
+      } catch {
+        // ignore
+      }
+    };
+  }, [authLoading, user?.id]);
+
+  // Keep ratings updated automatically
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) return;
+    if (!isSupabaseConfigured) return;
+
+    const ch = supabase
+      .channel(`ratings-live-${user.id}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'swap_ratings' }, (payload) => {
+        try {
+          const r: any = payload.new;
+          const ratedId = r?.rated_id as string | undefined;
+          const rating = Number(r?.rating);
+          if (!ratedId || !Number.isFinite(rating)) return;
+          setRatingsByUser((prev) => {
+            const cur = prev[ratedId] || { avg: 0, count: 0 };
+            const nextCount = cur.count + 1;
+            const nextAvg = (cur.avg * cur.count + rating) / nextCount;
+            return { ...prev, [ratedId]: { avg: nextAvg, count: nextCount } };
+          });
+        } catch {
+          // ignore
+        }
+      })
+      .subscribe();
+
+    return () => {
+      try {
+        supabase.removeChannel(ch);
+      } catch {
+        // ignore
+      }
+    };
+  }, [authLoading, user?.id]);
 
   // Listen for child PostDetail requests to open the availability modal
   useEffect(() => {
@@ -331,6 +544,22 @@ export default function Home() {
         settings: settingsById[id] || null,
         skills: (skillsByOwner[id] || []).slice(0, 3),
       }));
+
+      try {
+        if (ownerIds.length > 0) {
+          const { data: ratingsData } = await supabase.from('swap_ratings').select('rated_id, rating').in('rated_id', ownerIds);
+          const map: Record<string, { avg: number; count: number }> = {};
+          (ratingsData || []).forEach((r: any) => {
+            const id = r.rated_id as string;
+            map[id] = map[id] || { avg: 0, count: 0 };
+            map[id].avg = (map[id].avg * map[id].count + r.rating) / (map[id].count + 1);
+            map[id].count += 1;
+          });
+          setRatingsByUser(map);
+        }
+      } catch (e) {
+        console.warn('Failed to load ratings', e);
+      }
 
       setFeed(owners);
     } catch (err) {
@@ -510,41 +739,41 @@ export default function Home() {
         { href: '/dashboard/settings', label: 'Profile', icon: UserCircle },
       ]}
       headerLeft={
-        <div className="w-full flex items-center justify-center">
-          <div className="w-full max-w-2xl flex items-center justify-between gap-4 px-4">
-            <div className="w-9 h-9 rounded-full overflow-hidden flex-shrink-0">
-              <Image src="/SkillSwap_Logo.jpg" alt="SkillSwap" width={36} height={36} className="object-cover" />
+        <div className="w-full flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
+            <Image src="/SkillSwap_Logo.jpg" alt="SkillSwap" width={40} height={40} className="object-cover" />
+          </div>
+
+          <div className="flex-1 min-w-0 flex justify-center">
+            <div className="w-full max-w-2xl relative">
+              <input
+                aria-label="Search swaps"
+                placeholder="Search Swaps"
+                className="mobile-header-search pl-10 w-full"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+              <Search className="absolute left-3 top-2.5 h-5 w-5 text-skillswap-400" />
             </div>
-            <div className="flex-1 mx-4">
-              <div className="relative">
-                <input
-                  aria-label="Search swaps"
-                  placeholder="Search Swaps"
-                  className="mobile-header-search pl-10 w-full"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                />
-                <Search className="absolute left-3 top-2.5 h-5 w-5 text-skillswap-400" />
-              </div>
-            </div>
-            <div className="flex-shrink-0 flex items-center gap-3">
+          </div>
+
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              aria-label="Messages"
+              title="Messages"
+              onClick={() => router.push('/messages')}
+              className="h-10 w-10 rounded-full bg-white flex items-center justify-center shadow-sm"
+            >
+              <MessageSquare className="h-5 w-5 text-skillswap-600" />
+            </button>
+            {!user && (
               <button
-                aria-label="Messages"
-                title="Messages"
-                onClick={() => router.push('/messages')}
-                className="w-9 h-9 rounded-full bg-white flex items-center justify-center shadow-sm"
+                onClick={() => router.push('/login')}
+                className="px-3 h-10 rounded-full bg-skillswap-500 text-white hover:bg-skillswap-600 text-sm"
               >
-                <MessageSquare className="h-5 w-5 text-skillswap-600" />
+                Login
               </button>
-              {!user && (
-                <button
-                  onClick={() => router.push('/login')}
-                  className="ml-2 px-3 py-2 rounded-md bg-skillswap-500 text-white hover:bg-skillswap-600 text-sm"
-                >
-                  Login
-                </button>
-              )}
-            </div>
+            )}
           </div>
         </div>
       }
@@ -571,23 +800,33 @@ export default function Home() {
             <div className="mt-4">
               <div className="flex justify-between text-sm text-skillswap-600">
                   <div>Number of swaps</div>
-                  <div className="font-semibold text-skillswap-800">{meProfile?.skills_count ?? 0}</div>
+                  <div className="font-semibold text-skillswap-800">{sidebarCounts.swaps}</div>
                 </div>
                 <div className="flex justify-between mt-2 text-sm text-skillswap-600">
                   <div>Swaps posted</div>
-                  <div className="font-semibold text-skillswap-800">{meProfile?.swap_points ?? 0}</div>
+                  <div className="font-semibold text-skillswap-800">{sidebarCounts.posted}</div>
                 </div>
             </div>
             <div className="mt-4 border-t border-skillswap-200 pt-3 space-y-2 text-sm">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="w-3 h-3 bg-skillswap-300 rounded-sm" />
-                  <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowMatchedSwapsCenter((v) => !v);
+                      // keep behavior consistent with other sidebar actions
+                      const feedEl = document.querySelector('section.space-y-6');
+                      if (feedEl) feedEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }}
+                    aria-expanded={showMatchedSwapsCenter}
+                    className="flex items-center gap-2"
+                  >
                     <span className="font-medium">Matched Swaps</span>
                     {matchedDetails.length > 0 && (
                       <span className="text-xs bg-skillswap-100 text-skillswap-700 rounded-full px-2 py-0.5">{matchedDetails.length}</span>
                     )}
-                  </div>
+                  </button>
                 </div>
               </div>
 
@@ -601,15 +840,26 @@ export default function Home() {
                         <div className="flex items-start gap-3">
                           <div className="w-12 h-12 rounded-full overflow-hidden">
                             <Avatar className="h-12 w-12">
-                              <AvatarFallback>{((m.teacher?.full_name || m.teacher_id || 'M').slice(0, 1))}</AvatarFallback>
+                              <AvatarFallback>{String(m.teacher?.full_name || 'SkillSwap member').slice(0, 1)}</AvatarFallback>
                             </Avatar>
                           </div>
                           <div>
-                            <div className="font-semibold text-sm text-skillswap-800">{m.teacher?.full_name || m.teacher_id || 'SkillSwap member'}</div>
-                            <p className="text-xs text-skillswap-600 mt-1">{m.teacher?.bio || m.teacher_id || 'SkillSwap member'}</p>
+                            <div className="font-semibold text-sm text-skillswap-800">{m.teacher?.full_name || 'SkillSwap member'}</div>
+                            {m.teacher_id && ratingsByUser[m.teacher_id] ? (
+                              <div className="text-xs text-skillswap-500 mt-0.5">★ {ratingsByUser[m.teacher_id].avg.toFixed(1)} ({ratingsByUser[m.teacher_id].count})</div>
+                            ) : null}
+                            <p className="text-xs text-skillswap-600 mt-1">
+                              {m.teacherSettings?.headline || m.teacherSettings?.current_title || m.teacherSettings?.current_company || m.teacher?.bio || ''}
+                            </p>
                           </div>
                         </div>
-                        <div className="text-xs text-skillswap-500">{m.created_at ? new Date(m.created_at).toLocaleString() : ''}</div>
+                        <time
+                          className="text-xs text-skillswap-500"
+                          dateTime={m.created_at || undefined}
+                          title={m.created_at ? formatExactDateTimeWithSeconds(m.created_at) : undefined}
+                        >
+                          {m.created_at ? formatExactDateTime(m.created_at) : ''}
+                        </time>
                       </div>
 
                       <div className="mt-3 text-sm text-skillswap-700">
@@ -628,6 +878,7 @@ export default function Home() {
                             // set selected post to show inline
                             setSelectedPostId(m.teach_skill_id);
                             setSelectedPostFallback(m);
+                            setShowMatchedSwapsCenter(false);
                             // scroll to center feed area
                             const feedEl = document.querySelector('section.space-y-6');
                             if (feedEl) feedEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -658,6 +909,85 @@ export default function Home() {
 
         {/* Center feed */}
         <section className="space-y-6">
+
+          {/* Matched swaps (mini post cards) */}
+          {!selectedPostId && showMatchedSwapsCenter && matchedDetails.length > 0 && (
+            <div className="feed-card">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-skillswap-800">Matched Swaps</h3>
+                <span className="text-xs bg-skillswap-100 text-skillswap-700 rounded-full px-2 py-0.5">{matchedDetails.length}</span>
+              </div>
+
+              <div className="mt-3 grid grid-cols-1 gap-3">
+                {matchedDetails.slice(0, 6).map((m) => {
+                  const name = m.teacher?.full_name || 'SkillSwap member';
+                  const subtitle = m.teacherSettings?.headline || m.teacherSettings?.current_title || m.teacherSettings?.current_company || m.teacher?.bio || '';
+                  const skillName = m.teachSkill?.name || m.skill || 'Skill';
+                  const prof = m.teachSkill?.proficiency_level || '';
+                  const rating = m.teacher_id ? ratingsByUser[m.teacher_id] : null;
+                  return (
+                    <article key={`matched-mini-${m.teacher_id}-${m.teach_skill_id}`} className="bg-white border border-skillswap-200 rounded-lg p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-3 min-w-0">
+                          <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
+                            <Avatar className="h-10 w-10">
+                              <AvatarFallback>{String(name).slice(0, 1)}</AvatarFallback>
+                            </Avatar>
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <div className="font-semibold text-sm text-skillswap-800 truncate">{name}</div>
+                              <span className="text-[11px] bg-skillswap-100 text-skillswap-700 rounded-full px-2 py-0.5">Matched</span>
+                            </div>
+                            {rating ? (
+                              <div className="text-xs text-skillswap-500 mt-0.5">★ {rating.avg.toFixed(1)} ({rating.count})</div>
+                            ) : null}
+                            {subtitle ? <p className="text-xs text-skillswap-600 mt-0.5 truncate">{subtitle}</p> : null}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 text-sm text-skillswap-700">
+                        <p className="text-xs font-medium text-skillswap-800">Skills</p>
+                        <ul className="mt-1 space-y-1">
+                          <li className="flex items-center justify-between gap-3">
+                            <span className="truncate">{skillName}</span>
+                            <span className="text-xs text-skillswap-500 flex-shrink-0">{prof}</span>
+                          </li>
+                        </ul>
+                      </div>
+
+                      <div className="mt-3 flex gap-3 flex-wrap">
+                        <button
+                          onClick={() => {
+                            setSelectedPostId(m.teach_skill_id);
+                            setSelectedPostFallback(m);
+                            setShowMatchedSwapsCenter(false);
+                            const feedEl = document.querySelector('section.space-y-6');
+                            if (feedEl) feedEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                          }}
+                          className="btn-outline-rounded"
+                        >
+                          View Swap Post
+                        </button>
+                        <button
+                          onClick={() => {
+                            const skillObj = m.teachSkill
+                              ? { id: m.teachSkill.id, name: m.teachSkill.name, skill_type: 'teach', proficiency_level: m.teachSkill.proficiency_level }
+                              : undefined;
+                            openAvailabilityModal(m.teacher_id, skillObj as any);
+                          }}
+                          className="btn-primary-rounded"
+                        >
+                          Send Request
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           
 
           
@@ -714,10 +1044,21 @@ export default function Home() {
 
                       <div className="flex-1">
                         <div className="flex items-center justify-between">
-                          <h3 className="font-semibold text-skillswap-800">{g.owner.profile?.full_name || g.owner.id || 'SkillSwap member'}</h3>
-                          <div className="text-xs text-skillswap-500">
-                            {g.ts ? new Date(g.ts).toLocaleString() : ''}
+                          <div>
+                            <h3 className="font-semibold text-skillswap-800">
+                              {g.owner.profile?.full_name || g.owner.id || 'SkillSwap member'}
+                            </h3>
+                            {ratingsByUser[g.owner.id] ? (
+                              <div className="text-xs text-skillswap-500 mt-0.5">★ {ratingsByUser[g.owner.id].avg.toFixed(1)} ({ratingsByUser[g.owner.id].count})</div>
+                            ) : null}
                           </div>
+                          <time
+                            className="text-xs text-skillswap-500"
+                            dateTime={g.ts || undefined}
+                            title={g.ts ? formatExactDateTimeWithSeconds(g.ts) : undefined}
+                          >
+                            {g.ts ? formatExactDateTime(g.ts) : ''}
+                          </time>
                         </div>
                         <p className="text-sm text-skillswap-600">{g.owner.settings?.headline || g.owner.profile?.bio || g.owner.id || 'SkillSwap member'}</p>
 
@@ -735,6 +1076,21 @@ export default function Home() {
 
                         <div className="mt-4 flex flex-wrap gap-3">
                           <button className="btn-outline-rounded" onClick={() => router.push(`/profile/${g.owner.id}`)}>View Profile</button>
+                          <button
+                            className="btn-outline-rounded"
+                            onClick={() => {
+                              const postId = g.skills?.[0]?.id;
+                              const shareKey = `${g.owner.id}|${g.ts || ''}|${postId || ''}`;
+                              const label = g.owner.profile?.full_name || 'this member';
+                              void sharePost(postId, label, shareKey);
+                            }}
+                          >
+                            {(() => {
+                              const postId = g.skills?.[0]?.id;
+                              const shareKey = `${g.owner.id}|${g.ts || ''}|${postId || ''}`;
+                              return copiedShareKey === shareKey ? 'Link copied' : 'Share';
+                            })()}
+                          </button>
                           {g.skills.map((skill) => {
                             const pending = skill.id ? (requestsBySkillId[skill.id] || []).some((r) => r.requester_id === user?.id && r.recipient_id === g.owner.id && r.status === 'pending') : false;
                             const isSending = Boolean(sending[skill.id || g.owner.id]);
@@ -771,6 +1127,13 @@ export default function Home() {
                 {notifications.map((n) => (
                   <li key={n.id} className="text-sm">
                     <div className="font-medium text-skillswap-800">{n.type}</div>
+                    <time
+                      className="text-xs text-skillswap-500 mt-1 block"
+                      dateTime={n.created_at}
+                      title={formatExactDateTimeWithSeconds(n.created_at)}
+                    >
+                      {formatExactDateTime(n.created_at)}
+                    </time>
                     <div className="text-xs text-skillswap-500 mt-1">
                       {n.read ? 'Read' : 'Unread'}
                     </div>

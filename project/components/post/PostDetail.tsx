@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { supabase } from '@/lib/supabase';
+import { formatExactDateTime, formatExactDateTimeWithSeconds } from '@/lib/utils';
 
 export default function PostDetail({ skillId, fallbackSkill, fallbackOwner }: { skillId: string | null; fallbackSkill?: any; fallbackOwner?: any }) {
   const router = useRouter();
@@ -16,6 +17,7 @@ export default function PostDetail({ skillId, fallbackSkill, fallbackOwner }: { 
   const [ownerSkills, setOwnerSkills] = useState<any[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [ownerRating, setOwnerRating] = useState<{ avg: number; count: number } | null>(null);
 
   useEffect(() => {
     if (!skillId) return;
@@ -49,6 +51,20 @@ export default function PostDetail({ skillId, fallbackSkill, fallbackOwner }: { 
         setOwner(profileData || null);
         setOwnerSettings(settingsData || null);
 
+        // load owner rating summary
+        try {
+          const { data: ratings } = await supabase.from('swap_ratings').select('rating').eq('rated_id', skillData.user_id);
+          if (ratings && ratings.length > 0) {
+            let sum = 0;
+            ratings.forEach((r: any) => (sum += r.rating));
+            setOwnerRating({ avg: sum / ratings.length, count: ratings.length });
+          } else {
+            setOwnerRating(null);
+          }
+        } catch (e) {
+          setOwnerRating(null);
+        }
+
         // try to load other skills for this owner to show multiple skills in the post
         try {
           const { data: ownerSkillsData } = await supabase.from('skills').select('*').eq('user_id', skillData.user_id).order('created_at', { ascending: false }).limit(10);
@@ -65,6 +81,38 @@ export default function PostDetail({ skillId, fallbackSkill, fallbackOwner }: { 
 
     void run();
   }, [skillId]);
+
+  // Live-update rating while viewing a post
+  useEffect(() => {
+    const ratedId = skill?.user_id as string | undefined;
+    if (!ratedId) return;
+
+    const ch = supabase
+      .channel(`post-rating-${ratedId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'swap_ratings', filter: `rated_id=eq.${ratedId}` }, async () => {
+        try {
+          const { data: ratings } = await supabase.from('swap_ratings').select('rating').eq('rated_id', ratedId);
+          if (ratings && ratings.length > 0) {
+            let sum = 0;
+            ratings.forEach((r: any) => (sum += r.rating));
+            setOwnerRating({ avg: sum / ratings.length, count: ratings.length });
+          } else {
+            setOwnerRating(null);
+          }
+        } catch {
+          // ignore
+        }
+      })
+      .subscribe();
+
+    return () => {
+      try {
+        supabase.removeChannel(ch);
+      } catch {
+        // ignore
+      }
+    };
+  }, [skill?.user_id]);
 
   if (!skillId) return null;
   if (loading) return <div className="feed-card">Loading post...</div>;
@@ -99,8 +147,19 @@ export default function PostDetail({ skillId, fallbackSkill, fallbackOwner }: { 
 
         <div className="flex-1">
           <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-skillswap-800">{displayName}</h3>
-            <div className="text-xs text-skillswap-500">{ts ? new Date(ts).toLocaleString() : ''}</div>
+            <div>
+              <h3 className="font-semibold text-skillswap-800">{displayName}</h3>
+              {ownerRating ? (
+                <div className="text-xs text-skillswap-500 mt-0.5">★ {ownerRating.avg.toFixed(1)} ({ownerRating.count})</div>
+              ) : null}
+            </div>
+            <time
+              className="text-xs text-skillswap-500"
+              dateTime={ts || undefined}
+              title={ts ? formatExactDateTimeWithSeconds(ts) : undefined}
+            >
+              {ts ? formatExactDateTime(ts) : ''}
+            </time>
           </div>
           <p className="text-sm text-skillswap-600">{displayBio}</p>
 

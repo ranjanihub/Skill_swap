@@ -187,6 +187,7 @@ export default function CalendarStandalonePage() {
   const [error, setError] = useState('');
 
   const [selectedSession, setSelectedSession] = useState<SkillSwapSession | null>(null);
+  const [selectedSessionRating, setSelectedSessionRating] = useState<number | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
 
   // Create (schedule) dialog state (reuses existing logic)
@@ -379,6 +380,11 @@ export default function CalendarStandalonePage() {
       if (updErr) throw updErr;
       setSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, status } : s)));
       setSelectedSession((prev) => (prev && prev.id === sessionId ? { ...prev, status } : prev));
+      // if session completed, we'll reload rating so UI can show input
+      if (status === 'completed' && selectedSession && selectedSession.id === sessionId) {
+        // clear previous rating to allow input
+        setSelectedSessionRating(null);
+      }
     } catch (e) {
       console.error('Failed to update session status', e);
       alert('Failed to update session.');
@@ -483,6 +489,52 @@ export default function CalendarStandalonePage() {
   };
 
   const monthDays = useMemo(() => buildMonthGrid(viewMonth), [viewMonth]);
+
+  // whenever the selected session changes, fetch rating by current user (if any)
+  useEffect(() => {
+    if (!selectedSession || !user) {
+      setSelectedSessionRating(null);
+      return;
+    }
+    if (!isSupabaseConfigured) return;
+    const run = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('swap_ratings')
+          .select('rating')
+          .eq('session_id', selectedSession.id)
+          .eq('rater_id', user.id)
+          .maybeSingle();
+        if (!error && data) {
+          setSelectedSessionRating(data.rating as number);
+        } else {
+          setSelectedSessionRating(null);
+        }
+      } catch (e) {
+        console.warn('Failed to load session rating', e);
+        setSelectedSessionRating(null);
+      }
+    };
+    void run();
+  }, [selectedSession, user]);
+
+  // submit a rating for the currently selected session
+  const submitSessionRating = async (rating: number) => {
+    if (!selectedSession || !user) return;
+    try {
+      const { error } = await supabase.from('swap_ratings').insert({
+        session_id: selectedSession.id,
+        rater_id: user.id,
+        rated_id: selectedSession.user_a_id === user.id ? selectedSession.user_b_id : selectedSession.user_a_id,
+        rating,
+      });
+      if (error) throw error;
+      setSelectedSessionRating(rating);
+    } catch (e) {
+      console.error('Failed to submit rating', e);
+      alert('Could not save rating.');
+    }
+  };
   const miniDays = useMemo(() => buildMonthGrid(miniMonth), [miniMonth]);
 
   const sessionsByDate = useMemo(() => {
@@ -966,6 +1018,9 @@ export default function CalendarStandalonePage() {
               setNotes(s.notes ?? '');
               setScheduledAtLocal(s.scheduled_at ? toDateTimeLocalValue(new Date(s.scheduled_at)) : '');
             }}
+            currentUserId={user?.id}
+            rating={selectedSessionRating}
+            onSubmitRating={submitSessionRating}
           />
         </DialogContent>
       </Dialog>

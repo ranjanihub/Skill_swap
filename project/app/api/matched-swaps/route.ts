@@ -27,6 +27,8 @@ export async function GET() {
             teacher_id: 'dev-teacher-1',
             learn_skill_id: 'dev-learn-1',
             teach_skill_id: 'dev-teach-1',
+            teacher: { full_name: 'Dev Teacher 1', bio: '' },
+            teacher_settings: { headline: 'Data analyst', current_title: null, current_company: null },
           },
           {
             skill: 'UI/UX',
@@ -34,6 +36,8 @@ export async function GET() {
             teacher_id: 'dev-teacher-2',
             learn_skill_id: 'dev-learn-2',
             teach_skill_id: 'dev-teach-2',
+            teacher: { full_name: 'Dev Teacher 2', bio: '' },
+            teacher_settings: { headline: 'UX designer', current_title: null, current_company: null },
           },
         ];
         return NextResponse.json(sample);
@@ -80,7 +84,8 @@ export async function GET() {
           teacher_id: 'dev-teacher-1',
           learn_skill_id: 'dev-learn-1',
           teach_skill_id: 'dev-teach-1',
-          teacher: { full_name: 'dev-teacher-1', bio: '' },
+          teacher: { full_name: 'Dev Teacher 1', bio: '' },
+          teacher_settings: { headline: 'Data analyst', current_title: null, current_company: null },
         },
         {
           skill: 'UI/UX',
@@ -88,7 +93,8 @@ export async function GET() {
           teacher_id: 'dev-teacher-2',
           learn_skill_id: 'dev-learn-2',
           teach_skill_id: 'dev-teach-2',
-          teacher: { full_name: 'dev-teacher-2', bio: '' },
+          teacher: { full_name: 'Dev Teacher 2', bio: '' },
+          teacher_settings: { headline: 'UX designer', current_title: null, current_company: null },
         },
       ];
       return NextResponse.json(sample);
