@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { Home, Users, CalendarDays, MessageSquare, UserCircle } from 'lucide-react';
+import { useNotifications } from '@/context/notification-context';
 
 export default function BottomNav() {
   return (
@@ -25,7 +26,18 @@ export default function BottomNav() {
       </Link>
 
       <Link className="bottom-nav-item" aria-label="Messages" title="Messages" href="/messages">
-        <MessageSquare className="h-5 w-5" />
+        <div className="relative">
+          <MessageSquare className="h-5 w-5" />
+          {(() => {
+            try {
+              const { unread } = useNotifications();
+              if (unread.messages > 0) return <span className="absolute -top-2 -right-3 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />;
+            } catch (e) {
+              return null;
+            }
+            return null;
+          })()}
+        </div>
         <span className="text-[11px]">Messages</span>
       </Link>
 

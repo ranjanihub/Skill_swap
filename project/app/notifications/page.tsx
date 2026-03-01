@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Home as HomeIcon, Users, Calendar, Bell, Briefcase, MessageSquare, Search, Compass, UserCircle } from 'lucide-react';
 
 import { useAuth } from '@/context/auth-context';
+import { useNotifications } from '@/context/notification-context';
 import { isSupabaseConfigured, Notification, supabase, supabaseConfigError } from '@/lib/supabase';
 import { formatExactDateTime, formatExactDateTimeWithSeconds } from '@/lib/utils';
 
@@ -44,6 +45,7 @@ function notifBody(n: Notification) {
 export default function NotificationsPage() {
   const router = useRouter();
   const { user, loading: authLoading, configError } = useAuth();
+  const { unread } = useNotifications();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -189,18 +191,23 @@ export default function NotificationsPage() {
             >
               <Bell className="h-5 w-5 text-skillswap-600" />
             </button>
+            <button
+              aria-label="Messages"
+              title="Messages"
+              onClick={() => router.push('/messages')}
+              className="h-10 w-10 rounded-full bg-white flex items-center justify-center shadow-sm"
+            >
+              <div className="relative">
+                <MessageSquare className="h-5 w-5 text-skillswap-600" />
+                {unread.messages > 0 ? (
+                  <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
+                ) : null}
+              </div>
+            </button>
           </div>
         </div>
-      }
-    >
-      <div className="w-full max-w-[1200px] mx-auto">
-        {error && (
-          <div className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 p-3">
-            <p className="text-sm text-destructive">{error}</p>
-          </div>
-        )}
-
-        <Card className="overflow-hidden">
+      }>
+      <Card className="overflow-hidden">
           <div className="p-4 border-b border-skillswap-200">
             <h1 className="text-lg font-semibold text-skillswap-800">Notifications</h1>
           </div>
@@ -241,8 +248,7 @@ export default function NotificationsPage() {
               </div>
             )}
           </div>
-        </Card>
-      </div>
+      </Card>
     </AppShell>
   );
 }

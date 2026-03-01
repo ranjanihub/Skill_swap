@@ -2,6 +2,7 @@ import './globals.css';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { AuthProvider } from '@/context/auth-context';
+import { NotificationsProvider } from '@/context/notification-context';
 import NavbarWrapper from '@/components/navbar-wrapper';
 import BottomNav from '@/components/bottom-nav';
 
@@ -23,11 +24,13 @@ export default function RootLayout({
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </head>
       <body className={inter.className}>
-        <AuthProvider>
-          <NavbarWrapper />
-          <div className="min-h-screen pb-[calc(4.5rem+env(safe-area-inset-bottom))]">{children}</div>
-          <BottomNav />
-        </AuthProvider>
+        <NotificationsProvider>
+          <AuthProvider>
+            <NavbarWrapper />
+            <div className="min-h-screen pb-[calc(4.5rem+env(safe-area-inset-bottom))]">{children}</div>
+            <BottomNav />
+          </AuthProvider>
+        </NotificationsProvider>
       </body>
     </html>
   );
