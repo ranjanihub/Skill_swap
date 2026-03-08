@@ -14,6 +14,7 @@ import {
 
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 
 type PublicProfile = Pick<UserProfile, 'id' | 'full_name' | 'bio' | 'skills_count' | 'swap_points'>;
 
@@ -22,7 +23,7 @@ type PublicSettings = Pick<UserSettings, 'avatar_url' | 'headline' | 'current_ti
 export default function ProfilePage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const { user, loading: authLoading, configError } = useAuth();
+  const { user, session, loading: authLoading, configError } = useAuth();
 
   const profileId = useMemo(() => (typeof params?.id === 'string' ? params.id : ''), [params]);
 
@@ -80,6 +81,37 @@ export default function ProfilePage() {
     void run();
   }, [authLoading, user, profileId, configError]);
 
+  // if the server-side tables don't yet have a name/avatar for the profile
+  // we're viewing, reach back to the auth metadata service to grab the
+  // Google defaults.  this allows users who sign up but never visit
+  // Settings to still see a reasonable picture when others view them.
+  useEffect(() => {
+    if (!profileId) return;
+    const needsName = !profile?.full_name;
+    const needsAvatar = !settings?.avatar_url;
+    if (!needsName && !needsAvatar) return;
+
+    const fetchMetadata = async () => {
+      try {
+        const res = await fetch(`/api/user-metadata/${profileId}`, {
+          headers: { Authorization: `Bearer ${session?.access_token || ''}` },
+        });
+        if (!res.ok) return;
+        const meta = await res.json();
+        if (needsName && meta.full_name) {
+          setProfile((p) => (p ? { ...p, full_name: meta.full_name } : p));
+        }
+        if (needsAvatar && meta.avatar_url) {
+          setSettings((s) => (s ? { ...s, avatar_url: meta.avatar_url } : s));
+        }
+      } catch (e) {
+        console.warn('failed to load user metadata', e);
+      }
+    };
+
+    void fetchMetadata();
+  }, [profileId, profile?.full_name, settings?.avatar_url, user]);
+
   if (authLoading || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -110,9 +142,32 @@ export default function ProfilePage() {
 
       <Card className="p-6 bg-white border-2 border-skillswap-200 space-y-5">
         <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-full bg-skillswap-500 flex-shrink-0" />
+          {/* avatar with fallback to Google picture when you're looking at your own profile */}
+          <Avatar className="h-16 w-16 flex-shrink-0">
+            <AvatarImage
+              src={
+                settings?.avatar_url ||
+                (user?.id === profileId
+                  ? (user?.user_metadata?.avatar_url as string | undefined)
+                  : undefined) ||
+                ''
+              }
+              alt={
+                profile?.full_name ||
+                (user?.id === profileId && (user?.user_metadata?.full_name as string)) ||
+                'Member'
+              }
+            />
+            <AvatarFallback>
+              {(profile?.full_name || (user?.id === profileId && (user?.user_metadata?.full_name as string)) || 'M').slice(0, 1)}
+            </AvatarFallback>
+          </Avatar>
           <div>
-            <h2 className="text-xl font-semibold text-skillswap-dark">{profile?.full_name || 'SkillSwap Member'}</h2>
+            <h2 className="text-xl font-semibold text-skillswap-dark">
+              {profile?.full_name ||
+                (user?.id === profileId && (user?.user_metadata?.full_name as string)) ||
+                'SkillSwap Member'}
+            </h2>
             <p className="text-skillswap-600">
               {settings?.headline ||
                 (settings?.current_title

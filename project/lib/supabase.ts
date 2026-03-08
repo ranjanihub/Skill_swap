@@ -46,6 +46,9 @@ export type SkillSwapSession = {
   scheduled_at: string | null;
   duration_minutes: number;
   notes: string | null;
+  meet_link?: string | null;
+  calendar_event_id?: string | null;
+  calendar_provider?: string | null;
   created_at: string;
 };
 
@@ -55,6 +58,11 @@ export type ConnectionRequest = {
   recipient_id: string;
   skill_id: string | null;
   status: 'pending' | 'accepted' | 'rejected';
+  session_note?: string;
+  duration_minutes?: number;
+  selected_slot_id?: string | null;
+  accepted_at?: string | null;
+  scheduled_session_id?: string | null;
   created_at: string;
 };
 
@@ -71,6 +79,13 @@ export type Message = {
   sender_id: string;
   body: string;
   created_at: string;
+};
+
+export type MessageRead = {
+  id: string;
+  message_id: string;
+  user_id: string;
+  read_at: string;
 };
 
 export type Notification = {

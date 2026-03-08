@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Home as HomeIcon, Users, Calendar, Bell, Briefcase, MessageSquare, Search, Compass, UserCircle } from 'lucide-react';
 
 import { useAuth } from '@/context/auth-context';
@@ -15,14 +15,18 @@ import {
   UserSettings,
 } from '@/lib/supabase';
 import { cn, formatExactDateTime, formatExactDateTimeWithSeconds } from '@/lib/utils';
+import { useUserIdentity } from '@/hooks/use-user-identity';
 
 import AppShell, { type ShellNavItem } from '@/components/app-shell';
 
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 type PublicProfile = Pick<UserProfile, 'id' | 'full_name' | 'bio'>;
+
+type ConnectionData = { profile: PublicProfile; settings?: any };
 
 type InvItem = {
   request: ConnectionRequest;
@@ -30,8 +34,40 @@ type InvItem = {
   requesterSettings?: Pick<UserSettings, 'headline' | 'current_title' | 'current_company' | 'avatar_url'> | null;
 };
 
+// helper to render an avatar+name pair with fallback metadata support
+function UserCardAvatar({
+  userId,
+  explicitName,
+  explicitAvatar,
+  children,
+  className,
+}: {
+  userId: string;
+  explicitName?: string | null;
+  explicitAvatar?: string | null;
+  children?: React.ReactNode;
+  className?: string;
+}) {
+  const { name, avatarUrl } = useUserIdentity(userId, explicitName, explicitAvatar);
+  return (
+    <div className={className}>
+      <div className="flex items-center gap-3">
+        <Avatar className="h-12 w-12">
+          <AvatarImage src={avatarUrl || ''} alt={name || 'Member'} />
+          <AvatarFallback>{(name || 'U').slice(0, 1)}</AvatarFallback>
+        </Avatar>
+        <div className="flex-1">
+          <p className="font-semibold text-skillswap-800 truncate">{name || 'Member'}</p>
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function NetworkPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, loading: authLoading, configError } = useAuth();
 
   const [loading, setLoading] = useState(true);
@@ -41,9 +77,21 @@ export default function NetworkPage() {
   const [search, setSearch] = useState('');
   const [headerQuery, setHeaderQuery] = useState('');
 
+  const [sidebarSelection, setSidebarSelection] = useState('');
+  const [connectionsData, setConnectionsData] = useState([] as ConnectionData[]);
+
   const [allMyRequests, setAllMyRequests] = useState<ConnectionRequest[]>([]);
   const [invitations, setInvitations] = useState<InvItem[]>([]);
   const [acting, setActing] = useState<Record<string, boolean>>({});
+  const [focusRequestId, setFocusRequestId] = useState('');
+
+  useEffect(() => {
+    const reqId = searchParams?.get('requestId') || '';
+    if (reqId) {
+      setFocusRequestId(reqId);
+      setTab('Catch up');
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -232,6 +280,38 @@ export default function NetworkPage() {
     return otherIds.size;
   }, [allMyRequests, user]);
 
+  // load connection profiles when sidebar selection changes
+  useEffect(() => {
+    const load = async () => {
+      if (sidebarSelection !== 'Connections' || !user) return;
+      const accepted = allMyRequests.filter((r) => r.status === 'accepted');
+      const otherIds = Array.from(
+        new Set(accepted.map((r) => (r.requester_id === user.id ? r.recipient_id : r.requester_id)))
+      );
+      if (otherIds.length === 0) {
+        setConnectionsData([]);
+        return;
+      }
+      try {
+        const [{ data: profiles }, { data: settings }] = await Promise.all([
+          supabase.from('user_profiles').select('id, full_name, bio').in('id', otherIds),
+          supabase
+            .from('user_settings')
+            .select('id, headline, current_title, current_company, avatar_url')
+            .in('id', otherIds),
+        ]);
+        const settingsById: Record<string, any> = {};
+        (settings || []).forEach((s: any) => (settingsById[s.id] = s));
+        setConnectionsData(
+          (profiles || []).map((p: any) => ({ profile: p, settings: settingsById[p.id] }))
+        );
+      } catch (e) {
+        console.error('Failed to load connection profiles', e);
+      }
+    };
+    void load();
+  }, [sidebarSelection, allMyRequests, user]);
+
   const filteredInvitations = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return invitations;
@@ -297,6 +377,33 @@ export default function NetworkPage() {
         { href: '/notifications', label: 'Notification', icon: Bell },
           { href: '/dashboard/settings', label: 'Settings', icon: UserCircle },
       ]}
+      mobileMenu={
+        <Card className="overflow-hidden">
+          <div className="p-4 border-b border-skillswap-200">
+            <h2 className="text-lg font-semibold text-skillswap-800">Manage my network</h2>
+          </div>
+          <div className="p-2">
+            {[{ label: 'Connections', count: connectionsCount }, { label: 'Following & followers', count: 0 }, { label: 'Groups', count: 0 }, { label: 'Events', count: 0 }, { label: 'Pages', count: 0 }, { label: 'Newsletters', count: 0 }].map((row) => (
+              <button
+                key={row.label}
+                type="button"
+                onClick={() => setSidebarSelection(row.label)}
+                className={cn(
+                  "w-full px-3 py-2 rounded-md flex items-center justify-between text-sm",
+                  "text-skillswap-700 hover:bg-skillswap-100",
+                  sidebarSelection === row.label && "bg-skillswap-100"
+                )}
+              >
+                <span className="flex items-center gap-3">
+                  <span className="h-4 w-4 rounded bg-skillswap-200" />
+                  {row.label}
+                </span>
+                <span className="text-skillswap-500">{row.count}</span>
+              </button>
+            ))}
+          </div>
+        </Card>
+      }
       headerLeft={
         <div className="w-full flex items-center gap-3 min-w-0">
           <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
@@ -338,7 +445,7 @@ export default function NetworkPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4">
           {/* Left: Manage my network */}
-          <aside>
+          <aside className="hidden lg:block">
             <Card className="overflow-hidden">
               <div className="p-4 border-b border-skillswap-200">
                 <h2 className="text-lg font-semibold text-skillswap-800">Manage my network</h2>
@@ -349,7 +456,12 @@ export default function NetworkPage() {
                   <button
                     key={row.label}
                     type="button"
-                    className="w-full px-3 py-2 rounded-md hover:bg-skillswap-100 flex items-center justify-between text-sm text-skillswap-700"
+                    onClick={() => setSidebarSelection(row.label)}
+                    className={cn(
+                      "w-full px-3 py-2 rounded-md flex items-center justify-between text-sm",
+                      "text-skillswap-700 hover:bg-skillswap-100",
+                      sidebarSelection === row.label && "bg-skillswap-100"
+                    )}
                   >
                     <span className="flex items-center gap-3">
                       <span className="h-4 w-4 rounded bg-skillswap-200" />
@@ -361,123 +473,164 @@ export default function NetworkPage() {
               </div>
             </Card>
 
-            <Card className="mt-4 overflow-hidden">
-              <div className="p-3 border-b border-skillswap-200 text-xs text-skillswap-500">Ad</div>
-              <div className="p-4 text-sm text-skillswap-600">
-                Ranjani, reactivate your Premium free trial today!
-                <div className="mt-3 h-36 rounded-md bg-skillswap-200" />
-              </div>
-            </Card>
           </aside>
 
-          {/* Center: invitations */}
+          {/* Center: main content; show connections grid when selected */}
           <main>
-            <Card className="overflow-hidden">
-              <div className="p-3 border-b border-skillswap-200">
-                <div className="flex items-center gap-6">
-                  <button
-                    type="button"
-                    onClick={() => setTab('Grow')}
-                    className={cn(
-                      'text-base font-semibold pb-2',
-                      tab === 'Grow' ? 'text-skillswap-800 border-b-2 border-skillswap-800' : 'text-skillswap-600'
-                    )}
-                  >
-                    Grow
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setTab('Catch up')}
-                    className={cn(
-                      'text-base font-semibold pb-2',
-                      tab === 'Catch up' ? 'text-skillswap-800 border-b-2 border-skillswap-800' : 'text-skillswap-600'
-                    )}
-                  >
-                    Catch up
-                  </button>
-                </div>
-              </div>
-
-              <div className="p-4 border-b border-skillswap-200 flex items-center justify-between">
-                <p className="text-base font-semibold text-skillswap-800">Invitations ({filteredInvitations.length})</p>
-                <button type="button" className="text-sm font-medium text-skillswap-600 hover:underline">Show all</button>
-              </div>
-
+            {sidebarSelection === 'Connections' ? (
               <div className="p-4">
-                <div className="mb-4">
-                  <div className="relative max-w-sm">
-                    <Input
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      placeholder="Search invitations"
-                      className="pl-9 h-9 bg-skillswap-50 border-skillswap-200"
-                    />
-                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-skillswap-600" />
-                  </div>
-                </div>
-
-                {loading ? (
-                  <div className="py-10 text-center text-sm text-skillswap-600">Loading…</div>
-                ) : filteredInvitations.length === 0 ? (
-                  <div className="py-10 text-center text-sm text-skillswap-600">No invitations.</div>
+                {connectionsData.length === 0 ? (
+                  <div className="py-10 text-center text-sm text-skillswap-600">No connections yet.</div>
                 ) : (
-                  <div className="divide-y divide-skillswap-200">
-                    {filteredInvitations.map((i) => {
-                      const req = i.request;
-                      const busy = Boolean(acting[req.id]);
-                      const title =
-                        i.requesterSettings?.headline ||
-                        (i.requesterSettings?.current_title
-                          ? `${i.requesterSettings.current_title}${i.requesterSettings.current_company ? ` — ${i.requesterSettings.current_company}` : ''}`
-                          : i.requesterProfile?.bio || '');
-
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {connectionsData.map((u) => {
                       return (
-                        <div key={req.id} className="py-4 flex items-center gap-4">
-                          <Avatar className="h-14 w-14">
-                            <AvatarImage src={i.requesterSettings?.avatar_url || ''} alt={i.requesterProfile?.full_name || 'Member'} />
-                            <AvatarFallback>{(i.requesterProfile?.full_name || 'M').slice(0, 1)}</AvatarFallback>
-                          </Avatar>
+                        <Card key={u.profile.id} className="p-4">
+                          <UserCardAvatar
+                            userId={u.profile.id}
+                            explicitName={u.profile.full_name}
+                            explicitAvatar={u.settings?.avatar_url as string | null}
+                          >
+                            {u.settings?.headline || u.settings?.current_title ? (
+                              <p className="text-xs text-skillswap-600 truncate">
+                                {u.settings.headline || u.settings.current_title}{' '}
+                                {u.settings.current_company ? `@ ${u.settings.current_company}` : ''}
+                              </p>
+                            ) : null}
+                          </UserCardAvatar>
 
-                          <div className="flex-1 min-w-0">
-                            <p className="text-base font-semibold text-skillswap-800 truncate">
-                              {i.requesterProfile?.full_name || 'Member'}
-                            </p>
-                            {title && <p className="text-sm text-skillswap-600 truncate mt-1">{title}</p>}
-                            <p className="text-xs text-skillswap-500 mt-1">Invited you to connect</p>
-                            <time
-                              className="text-xs text-skillswap-500 mt-1 block"
-                              dateTime={req.created_at}
-                              title={formatExactDateTimeWithSeconds(req.created_at)}
+                          <div className="mt-4 flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => router.push('/messages')}
                             >
-                              {formatExactDateTime(req.created_at)}
-                            </time>
+                              Message
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => router.push(`/profile/${u.profile.id}`)}
+                            >
+                              View Profile
+                            </Button>
                           </div>
-
-                          <div className="flex items-center gap-3">
-                            <button
-                              type="button"
-                              onClick={() => ignoreInvitation(req)}
-                              disabled={busy}
-                              className="text-sm text-skillswap-600 hover:underline"
-                            >
-                              Ignore
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => acceptInvitation(req)}
-                              disabled={busy}
-                              className="h-9 px-5 rounded-full border border-skillswap-500 text-skillswap-500 font-semibold hover:bg-skillswap-50"
-                            >
-                              Accept
-                            </button>
-                          </div>
-                        </div>
+                        </Card>
                       );
                     })}
                   </div>
                 )}
               </div>
-            </Card>
+            ) : (
+              <Card className="overflow-hidden">
+                <div className="p-3 border-b border-skillswap-200">
+                  <div className="flex items-center gap-6">
+                    <button
+                      type="button"
+                      onClick={() => setTab('Grow')}
+                      className={cn(
+                        'text-base font-semibold pb-2',
+                        tab === 'Grow' ? 'text-skillswap-800 border-b-2 border-skillswap-800' : 'text-skillswap-600'
+                      )}
+                    >
+                      Grow
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTab('Catch up')}
+                      className={cn(
+                        'text-base font-semibold pb-2',
+                        tab === 'Catch up' ? 'text-skillswap-800 border-b-2 border-skillswap-800' : 'text-skillswap-600'
+                      )}
+                    >
+                      Catch up
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-4 border-b border-skillswap-200 flex items-center justify-between">
+                  <p className="text-base font-semibold text-skillswap-800">Invitations ({filteredInvitations.length})</p>
+                  <button type="button" className="text-sm font-medium text-skillswap-600 hover:underline">Show all</button>
+                </div>
+
+                <div className="p-4">
+                  <div className="mb-4">
+                    <div className="relative max-w-sm">
+                      <Input
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder="Search invitations"
+                        className="pl-9 h-9 bg-skillswap-50 border-skillswap-200"
+                      />
+                      <Search className="absolute left-3 top-2.5 h-4 w-4 text-skillswap-600" />
+                    </div>
+                  </div>
+
+                  {loading ? (
+                    <div className="py-10 text-center text-sm text-skillswap-600">Loading…</div>
+                  ) : filteredInvitations.length === 0 ? (
+                    <div className="py-10 text-center text-sm text-skillswap-600">No invitations.</div>
+                  ) : (
+                    <div className="divide-y divide-skillswap-200">
+                      {filteredInvitations.map((i) => {
+                        const req = i.request;
+                        const busy = Boolean(acting[req.id]);
+                        const title =
+                          i.requesterSettings?.headline ||
+                          (i.requesterSettings?.current_title
+                            ? `${i.requesterSettings.current_title}${i.requesterSettings.current_company ? ` — ${i.requesterSettings.current_company}` : ''}`
+                            : i.requesterProfile?.bio || '');
+
+                        return (
+                          <div key={req.id} className="py-4 flex items-center gap-4">
+                            <div>
+                              <UserCardAvatar
+                                userId={i.requesterProfile?.id || req.requester_id}
+                                explicitName={i.requesterProfile?.full_name}
+                                explicitAvatar={i.requesterSettings?.avatar_url as string | null}
+                                className="h-14 w-full"
+                              />
+                            </div>
+
+                            <div className="flex-1 min-w-0">
+                              {/* name rendered inside UserCardAvatar above */}
+                              {title && <p className="text-sm text-skillswap-600 truncate mt-1">{title}</p>}
+                              <p className="text-xs text-skillswap-500 mt-1">Invited you to connect</p>
+                              <time
+                                className="text-xs text-skillswap-500 mt-1 block"
+                                dateTime={req.created_at}
+                                title={formatExactDateTimeWithSeconds(req.created_at)}
+                              >
+                                {formatExactDateTime(req.created_at)}
+                              </time>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                              <button
+                                type="button"
+                                onClick={() => ignoreInvitation(req)}
+                                disabled={busy}
+                                className="text-sm text-skillswap-600 hover:underline"
+                              >
+                                Ignore
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => acceptInvitation(req)}
+                                disabled={busy}
+                                className="h-9 px-5 rounded-full border border-skillswap-500 text-skillswap-500 font-semibold hover:bg-skillswap-50"
+                              >
+                                Accept
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </Card>
+            )}
           </main>
         </div>
       </div>

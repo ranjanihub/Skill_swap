@@ -51,6 +51,8 @@ export default function Home() {
   const [availModal, setAvailModal] = useState<{ ownerId: string; skill?: Skill } | null>(null);
   const [availabilities, setAvailabilities] = useState<string[]>([]);
   const [newAvailability, setNewAvailability] = useState('');
+  const [sessionNote, setSessionNote] = useState('');
+  const [sessionDurationMinutes, setSessionDurationMinutes] = useState<number>(60);
 
   const [query, setQuery] = useState('');
   const [showPostModal, setShowPostModal] = useState(false);
@@ -652,7 +654,7 @@ export default function Home() {
     });
   }, [feed, query]);
 
-  const sendSwapRequest = async (ownerId: string, skillId?: string, avail?: string[]) => {
+  const sendSwapRequest = async (ownerId: string, skillId: string | undefined, opts: { note: string; durationMinutes: number; slots: string[] }) => {
     if (!user) return;
     const key = skillId || ownerId;
 
@@ -664,12 +666,57 @@ export default function Home() {
 
     try {
       setSending((prev) => ({ ...prev, [key]: true }));
-      const { data, error: insertError } = await supabase
+      const baseInsert = {
+        requester_id: user.id,
+        recipient_id: ownerId,
+        skill_id: skillId || null,
+        status: 'pending',
+      };
+
+      // New schema insert (preferred)
+      let data: any = null;
+      const { data: dataNew, error: insertErrorNew } = await supabase
         .from('connection_requests')
-        .insert({ requester_id: user.id, recipient_id: ownerId, skill_id: skillId || null, status: 'pending' })
+        .insert({
+          ...baseInsert,
+          session_note: opts.note,
+          duration_minutes: opts.durationMinutes || 60,
+        } as any)
         .select('*')
         .maybeSingle();
-      if (insertError) throw insertError;
+
+      if (insertErrorNew) {
+        const msg = `${insertErrorNew.message || ''} ${insertErrorNew.details || ''}`.toLowerCase();
+        const looksLikeMissingColumn = msg.includes('column') || msg.includes('session_note') || msg.includes('duration_minutes');
+
+        // Backward compatible fallback: old DB schema (no new columns)
+        if (looksLikeMissingColumn) {
+          const { data: dataOld, error: insertErrorOld } = await supabase
+            .from('connection_requests')
+            .insert(baseInsert as any)
+            .select('*')
+            .maybeSingle();
+          if (insertErrorOld) throw insertErrorOld;
+          data = dataOld;
+        } else {
+          throw insertErrorNew;
+        }
+      } else {
+        data = dataNew;
+      }
+
+      // Persist proposed slots (best-effort)
+      try {
+        const slots = (opts.slots || []).filter(Boolean).slice(0, 6);
+        if (data?.id && slots.length > 0) {
+          await supabase.from('connection_request_slots').insert(
+            slots.map((start_at) => ({ request_id: data.id, start_at }))
+          );
+        }
+      } catch (e) {
+        console.warn('connection_request_slots insert warning', e);
+      }
+
       if (data?.skill_id) {
         setRequestsBySkillId((prev) => ({
           ...prev,
@@ -678,23 +725,56 @@ export default function Home() {
       }
       // create a notification including availabilities if provided
       try {
-        const requesterName = (user.user_metadata?.full_name as string) || (user.email || '').split('@')[0] || 'Someone';
+        const requesterName =
+          meProfile?.full_name ||
+          (user.user_metadata?.full_name as string) ||
+          (user.email || '').split('@')[0] ||
+          'Someone';
+
+        let offeredSkillName: string | null = null;
+        try {
+          const { data: offered } = await supabase
+            .from('skills')
+            .select('name')
+            .eq('user_id', user.id)
+            .eq('skill_type', 'teach')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (offered?.name) offeredSkillName = offered.name as any;
+        } catch {
+          // ignore
+        }
+
+        const requestedSkillName = skillId
+          ? (feed.find((f) => f.id === ownerId)?.skills.find((s) => s.id === skillId)?.name ?? null)
+          : null;
+
         await supabase.from('notifications').insert({
           user_id: ownerId,
           type: 'connection_request',
           payload: {
             requester_id: user.id,
             requester_name: requesterName,
-            skill_id: skillId || null,
-            skill_name: skillId ? (feed.find((f) => f.id === ownerId)?.skills.find((s) => s.id === skillId)?.name ?? null) : null,
-            availabilities: avail || [],
+            request_id: data?.id ?? null,
+            requested_skill_id: skillId || null,
+            requested_skill_name: requestedSkillName,
+            offered_skill_name: offeredSkillName,
+            session_note: opts.note,
+            duration_minutes: opts.durationMinutes || 60,
+            slots: (opts.slots || []).slice(0, 6),
+            // legacy key (older clients)
+            availabilities: (opts.slots || []).slice(0, 6),
+            slots_count: (opts.slots || []).length,
           },
         });
       } catch (e) {
         console.warn('notifications insert warning', e);
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to send request';
+      const anyErr = err as any;
+      const parts = [anyErr?.message, anyErr?.details, anyErr?.hint, anyErr?.code].filter(Boolean);
+      const msg = parts.length ? parts.join(' — ') : (err instanceof Error ? err.message : 'Failed to send request');
       setError(msg);
     } finally {
       setSending((prev) => ({ ...prev, [key]: false }));
@@ -705,6 +785,8 @@ export default function Home() {
     setAvailModal({ ownerId, skill });
     setAvailabilities([]);
     setNewAvailability('');
+    setSessionNote('');
+    setSessionDurationMinutes(60);
   };
 
   const addAvailability = () => {
@@ -722,14 +804,80 @@ export default function Home() {
       setError('Please add at least one availability');
       return;
     }
-    await sendSwapRequest(availModal.ownerId, availModal.skill?.id, availabilities);
+    const note = sessionNote.trim();
+    if (!note) {
+      setError('Please add a session note');
+      return;
+    }
+    const duration = Number(sessionDurationMinutes || 0);
+    if (!duration || duration < 15) {
+      setError('Please set a valid session duration (min 15 minutes)');
+      return;
+    }
+
+    await sendSwapRequest(availModal.ownerId, availModal.skill?.id, {
+      note,
+      durationMinutes: duration,
+      slots: availabilities,
+    });
     setAvailModal(null);
   };
+
+  const mobileMenu = (
+    <>
+      {/* profile card */}
+      <div className="mb-4">
+        <div className="feed-card p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-16 h-16 rounded-full overflow-hidden">
+              <Avatar className="h-16 w-16">
+                <AvatarImage src={meSettings?.avatar_url || (user?.user_metadata?.avatar_url as string | undefined) || ''} alt={meProfile?.full_name || 'Member'} />
+                <AvatarFallback>{(meProfile?.full_name || user?.user_metadata?.full_name || 'S').slice(0, 1)}</AvatarFallback>
+              </Avatar>
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-skillswap-800">{meProfile?.full_name || (user?.user_metadata?.full_name as string) || 'SkillSwap member'}</h2>
+              <p className="text-sm text-skillswap-600">{meSettings?.headline || meSettings?.current_title || (user?.user_metadata?.role as string) || 'Complete your profile to get better matches'}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      {/* notifications panel */}
+      <div>
+        <div className="feed-card p-4">
+          <h3 className="text-lg font-semibold text-skillswap-800">Notifications</h3>
+          <p className="text-sm text-skillswap-600 mt-2">Recent</p>
+          {notifications.length === 0 ? (
+            <p className="mt-3 text-sm text-skillswap-500">No notifications yet.</p>
+          ) : (
+            <ul className="mt-3 space-y-3">
+              {notifications.map((n) => (
+                <li key={n.id} className="text-sm">
+                  <div className="font-medium text-skillswap-800">{n.type}</div>
+                  <time
+                    className="text-xs text-skillswap-500 mt-1 block"
+                    dateTime={n.created_at}
+                    title={formatExactDateTimeWithSeconds(n.created_at)}
+                  >
+                    {formatExactDateTime(n.created_at)}
+                  </time>
+                  <div className="text-xs text-skillswap-500 mt-1">
+                    {n.read ? 'Read' : 'Unread'}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </>
+  );
 
   return (
     <>
     <AppShell
       showSidebar={false}
+      mobileMenu={mobileMenu}
       nav={publicNav}
       bottomNav={[
         { href: '/', label: 'Home', icon: HomeIcon },
@@ -1161,6 +1309,10 @@ export default function Home() {
               {/* @ts-ignore */}
               <AvailabilityPicker
                 availabilities={availabilities}
+                note={sessionNote}
+                onNoteChange={setSessionNote}
+                durationMinutes={sessionDurationMinutes}
+                onDurationMinutesChange={setSessionDurationMinutes}
                 onAdd={(s: string) => setAvailabilities((prev) => [...prev, s].slice(0, 6))}
                 onRemove={(i: number) => setAvailabilities((prev) => prev.filter((_, idx) => idx !== i))}
               />

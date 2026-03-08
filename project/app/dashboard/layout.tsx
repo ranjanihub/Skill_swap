@@ -51,11 +51,30 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const router = useRouter();
   const { user, signOut } = useAuth();
+  const [meProfile, setMeProfile] = useState<
+    Pick<import('@/lib/supabase').UserProfile,
+      'id' | 'full_name' | 'bio' | 'skills_count' | 'swap_points'
+    > | null
+  >(null);
+  const [meSettings, setMeSettings] = useState<
+    Pick<import('@/lib/supabase').UserSettings,
+      'avatar_url' | 'headline' | 'current_title' | 'current_company' | 'display_name' | 'username'
+    > | null
+  >(null);
 
+  // identity prioritization: custom values first, google metadata second
   const displayName =
+    meProfile?.full_name ||
+    meSettings?.display_name ||
+    meSettings?.username ||
     (user?.user_metadata?.full_name as string | undefined) ||
     user?.email?.split('@')[0] ||
     'there';
+
+  const avatarUrl =
+    meSettings?.avatar_url ||
+    (user?.user_metadata?.avatar_url as string | undefined) ||
+    '';
 
   const handleSignOut = async () => {
     await signOut();
@@ -66,6 +85,29 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useEffect(() => {
     if (!user) return;
+
+    // load profile/settings so we can show the preferred identity values.
+    const fetchMe = async () => {
+      try {
+        const [{ data: p }, { data: s }] = await Promise.all([
+          supabase
+            .from('user_profiles')
+            .select('id, full_name, bio, skills_count, swap_points')
+            .eq('id', user.id)
+            .maybeSingle(),
+          supabase
+            .from('user_settings')
+            .select('avatar_url, headline, current_title, current_company, display_name, username')
+            .eq('id', user.id)
+            .maybeSingle(),
+        ]);
+        setMeProfile((p || null) as any);
+        setMeSettings((s || null) as any);
+      } catch (e) {
+        console.warn('failed to load current user profile/settings', e);
+      }
+    };
+    void fetchMe();
 
     const channel = supabase
       .channel(`notifications:${user.id}`)

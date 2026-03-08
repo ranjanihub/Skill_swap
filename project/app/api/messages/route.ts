@@ -4,9 +4,10 @@ import { createClient } from '@supabase/supabase-js';
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { conversation_id, sender_id, body: text } = body || {};
+    let { conversation_id, sender_id, recipient_id, body: text } = body || {} as any;
 
-    if (!conversation_id || !sender_id || !text) {
+    // require sender and text, and at least a conversation id or recipient
+    if (!sender_id || !text || (!conversation_id && !recipient_id)) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
@@ -18,6 +19,26 @@ export async function POST(req: Request) {
     }
 
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+
+    // if we only have sender and recipient, try to lookup or create the conversation
+    if (!conversation_id) {
+      // ensure recipient_id is defined
+      recipient_id = String(recipient_id);
+      // search for an existing conversation between the two
+      const pairCond = `and(participant_a.eq.${sender_id},participant_b.eq.${recipient_id}),and(participant_a.eq.${recipient_id},participant_b.eq.${sender_id})`;
+      const { data: existing } = await admin.from('conversations').select('id').or(pairCond).limit(1).maybeSingle();
+      if (existing && (existing as any).id) {
+        conversation_id = (existing as any).id;
+      } else {
+        const { data: newConv, error: newErr } = await admin
+          .from('conversations')
+          .insert({ participant_a: sender_id, participant_b: recipient_id })
+          .select('id')
+          .single();
+        if (newErr) throw newErr;
+        conversation_id = (newConv as any).id;
+      }
+    }
 
     // verify conversation exists and sender is a participant
     const { data: conv } = await admin.from('conversations').select('participant_a,participant_b').eq('id', conversation_id).maybeSingle();
@@ -48,6 +69,27 @@ export async function POST(req: Request) {
       .select('*')
       .single();
     if (insertErr) throw insertErr;
+
+    // Best-effort: insert a notification for the other participant
+    try {
+      const { data: prof } = await admin.from('user_profiles').select('full_name').eq('id', sender_id).maybeSingle();
+      const senderName = (prof as any)?.full_name || 'Someone';
+      const preview = typeof text === 'string' ? String(text).slice(0, 140) : 'New message';
+
+      await admin.from('notifications').insert({
+        user_id: other,
+        type: 'message',
+        payload: {
+          conversation_id,
+          sender_id,
+          sender_name: senderName,
+          message: preview,
+          created_at: (inserted as any)?.created_at,
+        },
+      });
+    } catch {
+      // ignore notification failures
+    }
 
     return NextResponse.json({ ok: true, message: inserted });
   } catch (err) {

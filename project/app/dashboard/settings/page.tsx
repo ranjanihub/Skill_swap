@@ -70,6 +70,10 @@ export default function SettingsPage() {
   const [editingSkillId, setEditingSkillId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<SkillEditDraft>({ name: '', proficiency_level: 'beginner', goal: '' });
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  // used to know if the user has interacted with the avatar control; if they
+  // never touched it we can write the Google picture back into the database
+  // automatically, otherwise respect their explicit remove action.
+  const [avatarTouched, setAvatarTouched] = useState(false);
   const [pairNotes, setPairNotes] = useState('');
   const [testDraft, setTestDraft] = useState('');
 
@@ -111,15 +115,59 @@ export default function SettingsPage() {
     if (!user) return;
     const { error } = await supabase.from('user_profiles').upsert({ id: user.id }, { onConflict: 'id' });
     if (error) throw error;
+
+    // also fill in the full_name if it's empty and we have metadata available
+    try {
+      const { data: existing, error: existingErr } = await supabase
+        .from('user_profiles')
+        .select('full_name')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (!existingErr && existing && !existing.full_name && user.user_metadata?.full_name) {
+        await supabase
+          .from('user_profiles')
+          .update({ full_name: user.user_metadata.full_name as string })
+          .eq('id', user.id);
+      }
+    } catch (e) {
+      console.warn('ensureUserProfileRow metadata patch failed', e);
+    }
   };
 
   const ensureUserSettingsRow = async () => {
     if (!user) return;
-    // Create the row with defaults if missing; conflict target is primary key `id`
+    // create the row if it doesn't exist. the "onConflict" flag means we
+    // won't stomp on an existing row.
     const { error: settingsEnsureError } = await supabase
       .from('user_settings')
       .upsert({ id: user.id }, { onConflict: 'id' });
     if (settingsEnsureError) throw settingsEnsureError;
+
+    // apply google metadata defaults to any fields that are still null. this
+    // mirrors similar logic in auth-context so that the page can behave
+    // correctly even if the client-side init hasn't run yet.
+    try {
+      const { data: existing, error: existingErr } = await supabase
+        .from('user_settings')
+        .select('avatar_url, display_name')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (!existingErr && existing) {
+        const patch: Partial<UserSettings> = {};
+        if (!existing.avatar_url && user.user_metadata?.avatar_url) {
+          patch.avatar_url = user.user_metadata.avatar_url as string;
+        }
+        if (!existing.display_name && user.user_metadata?.full_name) {
+          patch.display_name = user.user_metadata.full_name as string;
+        }
+        if (Object.keys(patch).length > 0) {
+          await supabase.from('user_settings').update(patch).eq('id', user.id);
+        }
+      }
+    } catch (e) {
+      // best-effort; ignore failures (table may not exist or permissions)
+      console.warn('ensureUserSettingsRow metadata patch failed', e);
+    }
   };
 
   useEffect(() => {
@@ -457,9 +505,14 @@ export default function SettingsPage() {
 
       await ensureUserProfileRow();
 
+      const nameToSave =
+        draft.full_name.trim() ||
+        (user.user_metadata?.full_name as string | undefined) ||
+        null;
+
       const { error: upsertError } = await supabase.from('user_profiles').upsert({
         id: user.id,
-        full_name: draft.full_name.trim() || null,
+        full_name: nameToSave,
         bio: draft.bio.trim() || null,
       }, { onConflict: 'id' });
 
@@ -480,7 +533,14 @@ export default function SettingsPage() {
           id: user.id,
           username: settings.username ?? null,
           display_name: settings.display_name ?? null,
-          avatar_url: settings.avatar_url ?? null,
+          // if the user never touched the avatar control and there is a
+          // Google picture available, keep that in the database so it can be
+          // shown to other people.  explicit removals/upload actions set
+          // avatarTouched to true and will be respected.
+          avatar_url:
+            !avatarTouched && !settings.avatar_url && user.user_metadata?.avatar_url
+              ? (user.user_metadata.avatar_url as string)
+              : settings.avatar_url ?? null,
           headline: settings.headline ?? null,
         };
         const { data: upsertedSettingsData, error: settingsUpsertError } = await supabase
@@ -799,12 +859,23 @@ export default function SettingsPage() {
           <Label className="text-skillswap-dark">Profile photo</Label>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-3">
-              {settings.avatar_url ? (
+              {/* show either the custom avatar, or fall back to the Google OAuth picture */}
+              {settings.avatar_url || (user?.user_metadata?.avatar_url as string | undefined) ? (
                 // preview
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={settings.avatar_url} alt="Avatar" className="w-20 h-20 rounded-full object-cover border" />
+                <img
+                  src={
+                    settings.avatar_url ||
+                    (user?.user_metadata?.avatar_url as string | undefined) ||
+                    ''
+                  }
+                  alt="Avatar"
+                  className="w-20 h-20 rounded-full object-cover border"
+                />
               ) : (
-                <div className="w-20 h-20 rounded-full bg-skillswap-50 flex items-center justify-center text-sm text-skillswap-600 border">No photo</div>
+                <div className="w-20 h-20 rounded-full bg-skillswap-50 flex items-center justify-center text-sm text-skillswap-600 border">
+                  No photo
+                </div>
               )}
             </div>
 
@@ -816,6 +887,7 @@ export default function SettingsPage() {
                   const file = e.target.files?.[0];
                   if (!file || !user) return;
                   setUploadingAvatar(true);
+                  setAvatarTouched(true);
                   setError('');
                   try {
                     const form = new FormData();
@@ -845,7 +917,10 @@ export default function SettingsPage() {
               <div className="mt-2 flex gap-2 items-center">
                 <button
                   type="button"
-                  onClick={() => updateSetting({ avatar_url: null })}
+                  onClick={() => {
+                    updateSetting({ avatar_url: null });
+                    setAvatarTouched(true);
+                  }}
                   disabled={saving || uploadingAvatar}
                   className="text-sm text-destructive"
                 >

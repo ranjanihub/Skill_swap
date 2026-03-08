@@ -17,6 +17,12 @@ import {
   ArrowLeft,
   Compass,
   UserCircle,
+  Clipboard,
+  Video,
+  Paperclip,
+  Mic,
+  Send,
+  Smile,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -33,14 +39,19 @@ import {
   Conversation,
   Message,
   UserProfile,
+  Skill,
+  SkillSwapSession,
+  ConnectionRequest,
 } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
 
 import AppShell, { type ShellNavItem } from '@/components/app-shell';
 
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 type ConvWithMeta = Conversation & {
@@ -52,9 +63,54 @@ type ConvWithMeta = Conversation & {
 
 const DESKTOP_TABS = ['Read', 'Unread', 'Starred'] as const;
 
+type ChatPayload =
+  | { _v: 1; type: 'text'; text: string }
+  | { _v: 1; type: 'image'; url: string; name?: string | null; mime?: string | null; size?: number | null; caption?: string | null }
+  | { _v: 1; type: 'file'; url: string; name: string; mime?: string | null; size?: number | null }
+  | { _v: 1; type: 'voice'; url: string; mime?: string | null; durationSec?: number | null }
+  | { _v: 1; type: 'notes'; title?: string | null; text: string }
+  | { _v: 1; type: 'system'; text: string };
+
+function tryParsePayload(raw: string): ChatPayload {
+  const s = String(raw ?? '');
+  const trimmed = s.trim();
+  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (parsed && parsed._v === 1 && typeof parsed.type === 'string') return parsed as ChatPayload;
+    } catch {
+      // fall through
+    }
+  }
+  return { _v: 1, type: 'text', text: s };
+}
+
+function formatTime(iso: string) {
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return '';
+  }
+}
+
+function formatBytes(n?: number | null) {
+  const v = typeof n === 'number' && Number.isFinite(n) ? n : null;
+  if (!v) return null;
+  const kb = v / 1024;
+  if (kb < 1024) return `${Math.round(kb)} KB`;
+  return `${(kb / 1024).toFixed(1)} MB`;
+}
+
+function buildGoogleCalendarEventUrl(eventId: string) {
+  return `https://calendar.google.com/calendar/u/0/r/eventedit/${encodeURIComponent(eventId)}`;
+}
+
 export default function MessagesPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
+  const { toast } = useToast();
 
   const [conversations, setConversations] = useState<ConvWithMeta[]>([]);
   const [settingsById, setSettingsById] = useState<Record<string, { avatar_url?: string | null }>>({});
@@ -71,6 +127,30 @@ export default function MessagesPage() {
   const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const [otherTeachSkill, setOtherTeachSkill] = useState<Skill | null>(null);
+  const [activeSession, setActiveSession] = useState<SkillSwapSession | null>(null);
+  const [calendarEventId, setCalendarEventId] = useState<string | null>(null);
+  const [googleConnected, setGoogleConnected] = useState<boolean>(false);
+
+  const [otherOnline, setOtherOnline] = useState<boolean>(false);
+  const [readsByMessageId, setReadsByMessageId] = useState<Record<string, Set<string>>>({});
+
+  const [showEmojiRow, setShowEmojiRow] = useState(false);
+  const [composerMode, setComposerMode] = useState<'message' | 'notes'>('message');
+  const [showSessionRequest, setShowSessionRequest] = useState(false);
+  const [sessionNote, setSessionNote] = useState('');
+  const [sessionDuration, setSessionDuration] = useState<number>(60);
+  const [slotInput, setSlotInput] = useState('');
+  const [proposedSlots, setProposedSlots] = useState<string[]>([]);
+
+  const [uploading, setUploading] = useState(false);
+
+  const [recording, setRecording] = useState(false);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const recordChunksRef = useRef<Blob[]>([]);
+  const recordStartRef = useRef<number | null>(null);
 
   useEffect(() => {
     // load starred conversations from localStorage
@@ -226,6 +306,64 @@ export default function MessagesPage() {
     };
   }, [activeConv, user]);
 
+  // Load chat header metadata: partner teach skill, active session, calendar linkage, Google connection
+  useEffect(() => {
+    if (!activeConv || !user) {
+      setOtherTeachSkill(null);
+      setActiveSession(null);
+      setCalendarEventId(null);
+      setGoogleConnected(false);
+      return;
+    }
+    if (!isSupabaseConfigured) return;
+
+    const otherId = activeConv.participant_a === user.id ? activeConv.participant_b : activeConv.participant_a;
+    let cancelled = false;
+
+    const run = async () => {
+      try {
+        const [{ data: skillRow }, { data: sessionRows }, { data: gConn }] = await Promise.all([
+          supabase
+            .from('skills')
+            .select('*')
+            .eq('user_id', otherId)
+            .eq('skill_type', 'teach')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+          supabase
+            .from('skill_swap_sessions')
+            .select('*')
+            .or(`and(user_a_id.eq.${user.id},user_b_id.eq.${otherId}),and(user_a_id.eq.${otherId},user_b_id.eq.${user.id})`)
+            .order('created_at', { ascending: false })
+            .limit(10),
+          supabase.from('google_calendar_connections').select('user_id').eq('user_id', user.id).maybeSingle(),
+        ]);
+
+        if (cancelled) return;
+        setOtherTeachSkill((skillRow || null) as any);
+        setGoogleConnected(Boolean(gConn));
+
+        const sessions = (sessionRows || []) as SkillSwapSession[];
+        const next = sessions.find((s) => s.status === 'ongoing') || sessions.find((s) => s.status === 'scheduled') || null;
+        setActiveSession(next);
+
+        if (next?.calendar_event_id) {
+          setCalendarEventId(next.calendar_event_id);
+        } else {
+          setCalendarEventId(null);
+        }
+      } catch (err) {
+        console.error('Failed to load header metadata', err);
+      }
+    };
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeConv, user]);
+
   // Real-time subscriptions: conversations and messages
   useEffect(() => {
     if (!user) return;
@@ -308,10 +446,27 @@ export default function MessagesPage() {
     setMobileView('chat');
   };
 
+  const otherUserId = useMemo(() => {
+    if (!activeConv || !user) return null;
+    return activeConv.participant_a === user.id ? activeConv.participant_b : activeConv.participant_a;
+  }, [activeConv, user]);
+
   const sendMessage = async () => {
-    if (!activeConv || !user || !text.trim()) return;
-    if (!activeConv.isAcceptedConnection) {
-      setError('You can only send messages to accepted connections.');
+    if (!user || !text.trim()) return;
+
+    // determine payload: try use existing conversation, otherwise fallback to otherUserId
+    const payload: any = { sender_id: user.id, body: text.trim() };
+    if (activeConv) {
+      if (!activeConv.isAcceptedConnection) {
+        setError('You can only send messages to accepted connections.');
+        return;
+      }
+      payload.conversation_id = activeConv.id;
+    } else if (otherUserId) {
+      // no open conversation, but we know the other user id
+      payload.recipient_id = otherUserId;
+    } else {
+      setError('No conversation or recipient specified');
       return;
     }
 
@@ -319,7 +474,7 @@ export default function MessagesPage() {
       const res = await fetch('/api/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ conversation_id: activeConv.id, sender_id: user.id, body: text.trim() }),
+        body: JSON.stringify(payload),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -332,13 +487,79 @@ export default function MessagesPage() {
         setMessages((prev) => [...prev, data as Message]);
         setText('');
         setTimeout(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' }), 50);
+        toast({ title: 'Message sent', variant: 'default' });
       }
     } catch (err) {
       console.error('Failed to send message', err);
-      setError('Failed to send message');
+      const msg = err instanceof Error ? err.message : 'Failed to send message';
+      setError(msg);
+      toast({ title: 'Error sending message', description: msg, variant: 'destructive' });
+    }
+  };
+  const startGoogleCalendarConnect = async () => {
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) throw new Error('Not authenticated');
+      const res = await fetch('/api/google/oauth/start', { method: 'POST', headers: { authorization: `Bearer ${token}` } });
+      const json = await res.json().catch(() => ({} as any));
+      if (!res.ok || !json?.url) throw new Error(json?.error || 'Failed to start Google OAuth');
+      window.location.href = json.url;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Failed to start Google OAuth';
+      setError(msg);
     }
   };
 
+  const addToGoogleCalendar = async () => {
+    if (!calendarEventId) return;
+    window.open(buildGoogleCalendarEventUrl(calendarEventId), '_blank', 'noopener,noreferrer');
+  };
+
+  const openMeetInNewTab = (link: string) => {
+    if (!link) return;
+    window.open(link, '_blank', 'noopener,noreferrer');
+  };
+
+  const buildGoogleMeetLink = (base: string | null) => {
+    if (!base) return '';
+    return base.startsWith('http') ? base : `https://${base}`;
+  };
+
+  const renderMessageContent = (m: Message) => {
+    let payload: ChatPayload = { _v: 1, type: 'text', text: m.body || '' };
+    try {
+      payload = tryParsePayload(m.body || '');
+    } catch {}
+
+    switch (payload.type) {
+      case 'text':
+        return <span>{payload.text}</span>;
+      case 'image':
+        return <img src={payload.url} alt={payload.name || ''} className="max-w-full rounded" />;
+      case 'file':
+        return (
+          <a href={payload.url} target="_blank" rel="noopener noreferrer" className="text-skillswap-500 underline">
+            {payload.name}
+          </a>
+        );
+      case 'voice':
+        return (
+          <audio controls src={payload.url} className="max-w-full" />
+        );
+      case 'notes':
+        return (
+          <div>
+            {payload.title && <p className="font-semibold">{payload.title}</p>}
+            <p>{payload.text}</p>
+          </div>
+        );
+      case 'system':
+        return <em className="text-skillswap-500">{payload.text}</em>;
+      default:
+        return <span>{m.body}</span>;
+    }
+  };
   const publicNav: ShellNavItem[] = [
     { href: '/', label: 'Home', icon: HomeIcon },
     { href: '/explore', label: 'Explore Skills', icon: Compass },
@@ -415,9 +636,27 @@ export default function MessagesPage() {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent>
                       <DropdownMenuItem
-                        onClick={() => {
-                          const ok = confirm('Clear all conversations locally? This will not delete server data. Continue?');
+                        onClick={async () => {
+                          const ok = confirm('Clear all conversations including server data? This will permanently delete your chats. Continue?');
                           if (!ok) return;
+                          try {
+                            // delete conversations & messages associated with current user
+                            if (user) {
+                              const { data: convs, error: convErr } = await supabase
+                                .from('conversations')
+                                .select('id')
+                                .or(`participant_a.eq.${user.id},participant_b.eq.${user.id}`);
+                              if (!convErr && convs) {
+                                const ids = convs.map((c: any) => c.id);
+                                if (ids.length) {
+                                  await supabase.from('messages').delete().in('conversation_id', ids);
+                                  await supabase.from('conversations').delete().in('id', ids);
+                                }
+                              }
+                            }
+                          } catch (e) {
+                            console.error('Failed to clear server chats', e);
+                          }
                           setConversations([]);
                           setMessages([]);
                           setActiveConv(null);
@@ -488,7 +727,7 @@ export default function MessagesPage() {
                     <p className="font-medium text-skillswap-800">No conversations yet</p>
                     <p className="text-sm text-skillswap-600 mt-2">Explore skills to start a conversation.</p>
                     <div className="mt-4">
-                      <Button onClick={() => router.push('/explore')} className="bg-skillswap-500 text-white">Explore Skills</Button>
+                      <Button onClick={() => router.push('/')} className="bg-skillswap-500 text-white">Explore Skills</Button>
                     </div>
                   </div>
                 ) : (
@@ -554,7 +793,8 @@ export default function MessagesPage() {
                 </div>
               ) : (
                 <>
-                  <div className="p-3 border-b border-skillswap-200 flex items-center gap-2">
+                  {/* Chat header (WhatsApp/IG-style) */}
+                  <div className="p-3 border-b border-skillswap-200 bg-white flex items-center gap-3">
                     <div className="lg:hidden">
                       <button
                         type="button"
@@ -566,15 +806,31 @@ export default function MessagesPage() {
                       </button>
                     </div>
 
+                    <Avatar className="h-10 w-10">
+                      <AvatarImage src={activeConv.avatar_url ?? ''} alt={activeConv.other?.full_name ?? 'Member'} />
+                      <AvatarFallback>{(activeConv.other?.full_name || 'M').slice(0, 1)}</AvatarFallback>
+                    </Avatar>
+
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-sm text-skillswap-800 truncate">
-                          {activeConv.other?.full_name ?? 'Member'}
-                        </p>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <p className="font-semibold text-sm text-skillswap-800 truncate">{activeConv.other?.full_name ?? 'Member'}</p>
+                        <span className={cn('h-2 w-2 rounded-full flex-shrink-0', otherOnline ? 'bg-emerald-500' : 'bg-skillswap-300')} aria-hidden="true" />
+                        <p className="text-xs text-skillswap-600 flex-shrink-0">{otherOnline ? 'Online' : 'Offline'}</p>
+                      </div>
+                      <p className="text-xs text-skillswap-600 truncate mt-0.5">
+                        {otherTeachSkill?.name ? `Teaching: ${otherTeachSkill.name}` : 'SkillSwap chat'}
+                      </p>
                     </div>
 
-                    <button className="h-9 w-9 rounded-full hover:bg-skillswap-100 flex items-center justify-center" aria-label="Star">
-                      <Star className="h-5 w-5 text-skillswap-600" />
-                    </button>
+                    <Button
+                      size="sm"
+                      className="bg-skillswap-500 text-white"
+                      onClick={() => setShowSessionRequest((v) => !v)}
+                      disabled={!activeConv.isAcceptedConnection}
+                    >
+                      Schedule Session
+                    </Button>
+
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <button className="h-9 w-9 rounded-full hover:bg-skillswap-100 flex items-center justify-center" aria-label="More">
@@ -611,6 +867,91 @@ export default function MessagesPage() {
                     </DropdownMenu>
                   </div>
 
+                  {/* Session tools + request panel (inside chat) */}
+                  <div className="border-b border-skillswap-100 bg-skillswap-50/60 p-3">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setShowSessionRequest(true)}
+                          disabled={!activeConv.isAcceptedConnection}
+                        >
+                          Request Session
+                        </Button>
+
+                        <Button
+                          size="sm"
+                          variant={composerMode === 'notes' ? 'default' : 'outline'}
+                          className={composerMode === 'notes' ? 'bg-skillswap-500 text-white' : ''}
+                          onClick={() => setComposerMode((m) => (m === 'notes' ? 'message' : 'notes'))}
+                          disabled={!activeConv.isAcceptedConnection}
+                        >
+                          <Clipboard className="h-4 w-4 mr-2" />
+                          Share notes
+                        </Button>
+
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            if (!activeSession?.meet_link) {
+                              // maybe open request meet modal; for now just alert
+                              alert('No meet link yet');
+                            } else {
+                              openMeetInNewTab(activeSession.meet_link);
+                            }
+                          }}
+                        >
+                          <Video className="h-4 w-4 mr-2" />
+                          {activeSession?.meet_link ? 'Join Meet' : 'Request Meet'}
+                        </Button>
+                      </div>
+                      {googleConnected && (
+                        <Button size="sm" variant="outline" onClick={addToGoogleCalendar} disabled={!calendarEventId}>
+                          Add to calendar
+                        </Button>
+                      )}
+                    </div>
+                    {showSessionRequest && (
+                      <div className="mt-3">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Input
+                            value={sessionNote}
+                            onChange={(e) => setSessionNote(e.target.value)}
+                            placeholder="Note (optional)"
+                            className="flex-1"
+                          />
+                          <Input
+                            value={sessionDuration.toString()}
+                            onChange={(e) => setSessionDuration(Number(e.target.value) || 0)}
+                            placeholder="Duration min"
+                            type="number"
+                            className="w-24"
+                          />
+                          <Input
+                            value={slotInput}
+                            onChange={(e) => setSlotInput(e.target.value)}
+                            placeholder="Propose slots (comma separated)"
+                            className="flex-1"
+                          />
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              const slots = slotInput.split(',').map((s) => s.trim()).filter(Boolean);
+                              setProposedSlots(slots);
+                            }}
+                          >
+                            Set Slots
+                          </Button>
+                        </div>
+                        {proposedSlots.length > 0 && (
+                          <p className="mt-2 text-xs text-skillswap-600">Proposed: {proposedSlots.join(', ')}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
                   <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 bg-white">
                     {messages.length === 0 ? (
                       <div className="text-sm text-skillswap-600 mt-8">No messages yet.</div>
@@ -621,7 +962,7 @@ export default function MessagesPage() {
                           return (
                             <div key={m.id} className={cn('flex', mine ? 'justify-end' : 'justify-start')}>
                               <div className={cn('max-w-[75%] rounded-2xl px-4 py-2 text-sm', mine ? 'bg-skillswap-500 text-white' : 'bg-skillswap-100 text-skillswap-800')}>
-                                {m.body}
+                                {renderMessageContent(m)}
                               </div>
                             </div>
                           );
@@ -632,21 +973,99 @@ export default function MessagesPage() {
 
                   <div className="p-3 border-t border-skillswap-200 bg-white">
                     <div className="flex items-center gap-2">
-                      <Input
+                      <button
+                        type="button"
+                        aria-label="Emoji"
+                        onClick={() => setShowEmojiRow((v) => !v)}
+                        className="h-9 w-9 rounded-full hover:bg-skillswap-100 flex items-center justify-center"
+                      >
+                        <Smile className="h-5 w-5 text-skillswap-600" />
+                      </button>
+
+                      <Textarea
                         value={text}
                         onChange={(e) => setText(e.target.value)}
-                        placeholder="Write a message..."
-                        className="h-10"
+                        placeholder={composerMode === 'notes' ? 'Write notes...' : 'Write a message...'}
+                        className="flex-1 h-20 resize-none"
                         disabled={!activeConv.isAcceptedConnection}
                         onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
+                          if (e.key === 'Enter' && !e.shiftKey) {
                             e.preventDefault();
                             void sendMessage();
                           }
                         }}
                       />
-                      <Button onClick={sendMessage} className="bg-skillswap-500 text-white" disabled={!activeConv.isAcceptedConnection}>Send</Button>
+
+                      <button
+                        type="button"
+                        className="h-9 w-9 rounded-full hover:bg-skillswap-100 flex items-center justify-center"
+                        onClick={() => fileInputRef.current?.click()}
+                        aria-label="Attach file"
+                      >
+                        <Paperclip className="h-5 w-5 text-skillswap-600" />
+                      </button>
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          // handle file upload (placeholder)
+                          alert(`Selected file: ${file.name}`);
+                        }}
+                      />
+
+                      <button
+                        type="button"
+                        className="h-9 w-9 rounded-full hover:bg-skillswap-100 flex items-center justify-center"
+                        onClick={sendMessage}
+                        disabled={!activeConv.isAcceptedConnection}
+                        aria-label="Send"
+                      >
+                        <Send className="h-5 w-5 text-skillswap-600" />
+                      </button>
+
+                      <button
+                        type="button"
+                        className="h-9 w-9 rounded-full hover:bg-skillswap-100 flex items-center justify-center"
+                        onClick={() => {
+                          if (recording) {
+                            // stop
+                            recorderRef.current?.stop();
+                          } else {
+                            // start
+                            navigator.mediaDevices
+                              .getUserMedia({ audio: true })
+                              .then((stream) => {
+                                const recorder = new MediaRecorder(stream);
+                                recorderRef.current = recorder;
+                                recorder.ondataavailable = (e) => {
+                                  recordChunksRef.current.push(e.data);
+                                };
+                                recorder.onstop = () => {
+                                  const blob = new Blob(recordChunksRef.current);
+                                  // placeholder for upload
+                                  alert('Recorded ' + blob.size + ' bytes');
+                                  recordChunksRef.current = [];
+                                };
+                                recorder.start();
+                                setRecording(true);
+                              })
+                              .catch((err) => console.error('Record failed', err));
+                          }
+                        }}
+                        aria-label="Record voice"
+                      >
+                        <Mic className="h-5 w-5 text-skillswap-600" />
+                      </button>
                     </div>
+                    {showEmojiRow && (
+                      <div className="mt-2">
+                        {/* emoji picker placeholder - can integrate real component */}
+                        <p className="text-sm text-skillswap-500">Emoji picker here</p>
+                      </div>
+                    )}
                     {!activeConv.isAcceptedConnection && (
                       <p className="mt-2 text-xs text-skillswap-500">You can only chat once the connection is accepted.</p>
                     )}

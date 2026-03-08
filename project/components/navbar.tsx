@@ -64,7 +64,7 @@ export function Navbar() {
                 variant="outline"
                 className="border-skillswap-800 text-skillswap-dark hover:bg-skillswap-100"
               >
-                <Link href="/dashboard">Dashboard</Link>
+                <Link href="/dashboard/connections">Dashboard</Link>
               </Button>
               <Button
                 onClick={handleSignOut}

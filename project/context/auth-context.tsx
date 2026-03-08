@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { Session, User } from '@supabase/supabase-js';
-import { isSupabaseConfigured, supabase, supabaseConfigError } from '@/lib/supabase';
+import { isSupabaseConfigured, supabase, supabaseConfigError, UserSettings } from '@/lib/supabase';
 
 interface AuthContextType {
   session: Session | null;
@@ -30,6 +30,65 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [configError, setConfigError] = useState<string | null>(supabaseConfigError);
 
   useEffect(() => {
+    // When a user signs in or we load an existing session we want to
+    // make sure we have a profile/settings row for them.  Google OAuth
+    // users often have a display name/avatar in the auth metadata, so
+    // we copy those values into our own tables as defaults when the
+    // rows are first created.  That way other users can see the avatar
+    // when they view a profile, and the values can be overridden later
+    // by the user.
+    const applyGoogleDefaults = async (user: User | null) => {
+      if (!user) return;
+      try {
+        // user_profiles.full_name
+        const { data: existingProfile, error: profileErr } = await supabase
+          .from('user_profiles')
+          .select('full_name')
+          .eq('id', user.id)
+          .maybeSingle();
+        if (profileErr) throw profileErr;
+        if (!existingProfile) {
+          await supabase.from('user_profiles').insert({
+            id: user.id,
+            full_name: (user.user_metadata?.full_name as string) || null,
+          });
+        } else if (!existingProfile.full_name && user.user_metadata?.full_name) {
+          await supabase
+            .from('user_profiles')
+            .update({ full_name: user.user_metadata.full_name })
+            .eq('id', user.id);
+        }
+
+        // user_settings.avatar_url and display_name
+        const { data: existingSettings, error: settingsErr } = await supabase
+          .from('user_settings')
+          .select('avatar_url, display_name')
+          .eq('id', user.id)
+          .maybeSingle();
+        if (settingsErr) throw settingsErr;
+        if (!existingSettings) {
+          await supabase.from('user_settings').insert({
+            id: user.id,
+            avatar_url: (user.user_metadata?.avatar_url as string) || null,
+            display_name: (user.user_metadata?.full_name as string) || null,
+          });
+        } else {
+          const patch: Partial<UserSettings> = {};
+          if (!existingSettings.avatar_url && user.user_metadata?.avatar_url) {
+            patch.avatar_url = user.user_metadata.avatar_url as string;
+          }
+          if (!existingSettings.display_name && user.user_metadata?.full_name) {
+            patch.display_name = user.user_metadata.full_name as string;
+          }
+          if (Object.keys(patch).length > 0) {
+            await supabase.from('user_settings').update(patch).eq('id', user.id);
+          }
+        }
+      } catch (err) {
+        console.warn('applyGoogleDefaults error', err);
+      }
+    };
+
     const initializeAuth = async () => {
       if (!isSupabaseConfigured) {
         setConfigError(supabaseConfigError);
@@ -43,6 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { data } = await supabase.auth.getSession();
         setSession(data.session);
         setUser(data.session?.user ?? null);
+        await applyGoogleDefaults(data.session?.user ?? null);
       } catch (error) {
         console.error('Failed to get session:', error);
       } finally {
@@ -62,6 +122,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
+      // each time auth state changes we should re-run the defaults
+      await applyGoogleDefaults(session?.user ?? null);
     });
 
     return () => {

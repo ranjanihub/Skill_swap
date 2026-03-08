@@ -20,13 +20,19 @@ const Avatar = React.forwardRef<
 ));
 Avatar.displayName = AvatarPrimitive.Root.displayName;
 
+// allow callers to pass null for src since our data sometimes has null
+interface AvatarImageProps extends Omit<React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Image>, 'src'> {
+  src?: string | null;
+}
+
 const AvatarImage = React.forwardRef<
   React.ElementRef<typeof AvatarPrimitive.Image>,
-  React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Image>
->(({ className, ...props }, ref) => (
+  AvatarImageProps
+>(({ className, src, ...props }, ref) => (
   <AvatarPrimitive.Image
     ref={ref}
     className={cn('aspect-square h-full w-full', className)}
+    src={src ?? undefined}
     {...props}
   />
 ));

@@ -758,21 +758,7 @@ export default function CalendarStandalonePage() {
             </button>
           </div>
 
-          <div className="px-4 pb-2 text-sm text-skillswap-700 font-medium flex items-center justify-between">
-            My calendars
-            <button type="button" className="h-8 w-8 rounded-full hover:bg-skillswap-50 flex items-center justify-center" aria-label="Toggle calendars">
-              <ChevronDown className="h-4 w-4 text-skillswap-600" />
-            </button>
-          </div>
 
-          <div className="px-4 pb-6 space-y-3">
-            {[{ name: 'Ranjani', checked: true }, { name: 'Birthdays', checked: true }, { name: 'Tasks', checked: true }].map((row) => (
-              <label key={row.name} className="flex items-center gap-3 text-sm text-skillswap-700 select-none">
-                <input type="checkbox" defaultChecked={row.checked} className="h-4 w-4 accent-skillswap-500" />
-                {row.name}
-              </label>
-            ))}
-          </div>
         </aside>
 
         {/* Main month view */}
@@ -1001,7 +987,13 @@ export default function CalendarStandalonePage() {
               setDetailsOpen(false);
               setSelectedSession(null);
             }}
-            onJoin={() => router.push('/messages')}
+            onJoin={(s) => {
+              if (s?.meet_link) {
+                window.open(s.meet_link, '_blank', 'noopener,noreferrer');
+                return;
+              }
+              router.push('/messages');
+            }}
             onCancel={(s) => updateSessionStatus(s.id, 'cancelled')}
             onMarkCompleted={(s) => updateSessionStatus(s.id, 'completed')}
             onReschedule={(s) => {

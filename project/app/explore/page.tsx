@@ -203,13 +203,13 @@ export default function ExplorePage() {
 
             <div className="flex gap-2">
               <Button
-                onClick={() => router.push('/dashboard#skills')}
+                onClick={() => router.push('/dashboard/settings')}
                 className="bg-skillswap-500 text-white hover:bg-skillswap-600"
               >
                 Update my skills
               </Button>
               <Button
-                onClick={() => router.push('/dashboard')}
+                onClick={() => router.push('/dashboard/connections')}
                 variant="outline"
                 className="border-skillswap-200 text-skillswap-600 hover:bg-skillswap-50 gap-2"
               >
@@ -231,7 +231,7 @@ export default function ExplorePage() {
               Be the first to add what you can teach and what you want to learn.
             </p>
             <Button
-              onClick={() => router.push('/dashboard#skills')}
+              onClick={() => router.push('/dashboard/settings')}
               className="bg-skillswap-500 text-white hover:bg-skillswap-600"
             >
               Add my skills
@@ -289,7 +289,7 @@ export default function ExplorePage() {
 
                   <div className="mt-5 flex gap-2">
                     <Button
-                      onClick={() => router.push('/dashboard#sessions')}
+                      onClick={() => router.push('/calendar')}
                       className="bg-skillswap-500 text-white hover:bg-skillswap-600 w-full"
                     >
                       Start a session

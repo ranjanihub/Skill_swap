@@ -73,7 +73,17 @@ export default function EventDetailDrawer({
         <h4 className="font-medium">Details</h4>
         <p className="text-sm text-skillswap-600 mt-1">Status: {session.status}</p>
         <p className="text-sm text-skillswap-600 mt-1">Duration: {session.duration_minutes ?? 60} minutes</p>
-        <p className="text-sm text-skillswap-600 mt-1">Mode: Chat (optional external call link)</p>
+        <p className="text-sm text-skillswap-600 mt-1">Mode: {session.meet_link ? 'Google Meet' : 'Chat'}</p>
+        {session.meet_link ? (
+          <a
+            className="text-sm text-skillswap-600 mt-1 inline-block underline"
+            href={session.meet_link}
+            target="_blank"
+            rel="noreferrer"
+          >
+            View Meet link
+          </a>
+        ) : null}
       </div>
 
       <div className="flex gap-2 flex-wrap">

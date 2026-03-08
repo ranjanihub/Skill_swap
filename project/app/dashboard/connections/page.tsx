@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -36,8 +36,11 @@ type ConnectionItem = {
 
 export default function ConnectionsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
+
+  const acceptRequestId = searchParams.get('acceptRequestId');
 
   const [connections, setConnections] = useState<ConnectionItem[]>([]);
   const [profilesById, setProfilesById] = useState<Record<string, PublicProfile>>({});
@@ -60,6 +63,15 @@ export default function ConnectionsPage() {
   const [availModalSkill, setAvailModalSkill] = useState<Skill | null>(null);
   const [availabilities, setAvailabilities] = useState<string[]>([]);
   const [newAvailability, setNewAvailability] = useState('');
+  const [sessionNote, setSessionNote] = useState('');
+  const [sessionDurationMinutes, setSessionDurationMinutes] = useState<number>(60);
+
+  // Slots + accept flow
+  const [slotsByRequestId, setSlotsByRequestId] = useState<Record<string, Array<{ id: string; request_id: string; start_at: string }>>>({});
+  const [acceptReq, setAcceptReq] = useState<ConnectionRequest | null>(null);
+  const [acceptSlotId, setAcceptSlotId] = useState<string>('');
+  const [accepting, setAccepting] = useState(false);
+  const [acceptError, setAcceptError] = useState('');
 
   useEffect(() => {
     if (authLoading) return;
@@ -84,6 +96,32 @@ export default function ConnectionsPage() {
           .or(`requester_id.eq.${user.id},recipient_id.eq.${user.id}`);
 
         const requests = (reqData || []) as ConnectionRequest[];
+
+        // Fetch proposed slots for requests (best-effort)
+        try {
+          const reqIds = (requests || []).map((r) => r.id).filter(Boolean).slice(0, 400);
+          if (reqIds.length > 0) {
+            const { data: slotsData } = await supabase
+              .from('connection_request_slots')
+              .select('id, request_id, start_at')
+              .in('request_id', reqIds);
+
+            const mapSlots: Record<string, Array<{ id: string; request_id: string; start_at: string }>> = {};
+            (slotsData || []).forEach((s: any) => {
+              mapSlots[s.request_id] = mapSlots[s.request_id] || [];
+              mapSlots[s.request_id].push(s);
+            });
+            Object.keys(mapSlots).forEach((k) => {
+              mapSlots[k].sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime());
+            });
+            setSlotsByRequestId(mapSlots);
+          } else {
+            setSlotsByRequestId({});
+          }
+        } catch (e) {
+          console.warn('Failed to load connection_request_slots', e);
+          setSlotsByRequestId({});
+        }
 
         // Fetch conversations involving user
         const { data: convData } = await supabase
@@ -233,6 +271,15 @@ export default function ConnectionsPage() {
     void run();
   }, [authLoading, user, router]);
 
+  useEffect(() => {
+    if (!acceptRequestId) return;
+    if (acceptReq) return;
+    const req = connections.find((c) => c.request?.id === acceptRequestId)?.request;
+    if (!req) return;
+    openAcceptModal(req);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [acceptRequestId, connections, slotsByRequestId]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return connections
@@ -321,33 +368,96 @@ export default function ConnectionsPage() {
     }
   };
 
-  const sendSwapRequest = async (skill: Skill, avail?: string[]) => {
+  const sendSwapRequest = async (skill: Skill, opts: { note: string; durationMinutes: number; slots: string[] }) => {
     if (!user) return toast({ title: 'Not signed in', description: 'Please sign in to send requests.' });
 
     setSendingRequests((s) => ({ ...s, [skill.id]: true }));
     try {
-      const { data: reqData, error: reqErr } = await supabase.from('connection_requests').insert({
+      const baseInsert = {
         requester_id: user.id,
         recipient_id: skill.user_id,
         skill_id: skill.id,
         status: 'pending',
-      }).select();
+      };
 
-      if (reqErr) {
-        console.error('connection_requests insert error', reqErr);
-        throw reqErr;
+      // New schema insert (preferred)
+      let reqData: any[] | null = null;
+      const { data: reqDataNew, error: reqErrNew } = await supabase
+        .from('connection_requests')
+        .insert({
+          ...baseInsert,
+          session_note: opts.note,
+          duration_minutes: opts.durationMinutes || 60,
+        } as any)
+        .select();
+
+      if (reqErrNew) {
+        const msg = `${reqErrNew.message || ''} ${reqErrNew.details || ''}`.toLowerCase();
+        const looksLikeMissingColumn = msg.includes('column') || msg.includes('session_note') || msg.includes('duration_minutes');
+
+        if (looksLikeMissingColumn) {
+          const { data: reqDataOld, error: reqErrOld } = await supabase
+            .from('connection_requests')
+            .insert(baseInsert as any)
+            .select();
+          if (reqErrOld) throw reqErrOld;
+          reqData = (reqDataOld || []) as any[];
+        } else {
+          console.error('connection_requests insert error', reqErrNew);
+          throw reqErrNew;
+        }
+      } else {
+        reqData = (reqDataNew || []) as any[];
       }
 
-      const requesterName = (user.user_metadata?.full_name as string) || (user.email || '').split('@')[0] || 'Someone';
+      // Persist proposed slots (best-effort)
+      try {
+        const inserted = reqData && reqData[0] ? (reqData[0] as ConnectionRequest) : null;
+        const slots = (opts.slots || []).filter(Boolean).slice(0, 6);
+        if (inserted?.id && slots.length > 0) {
+          await supabase.from('connection_request_slots').insert(slots.map((start_at) => ({ request_id: inserted.id, start_at })));
+        }
+      } catch (e) {
+        console.warn('connection_request_slots insert warning', e);
+      }
+
+      const requesterName =
+        meProfile?.full_name ||
+        (user.user_metadata?.full_name as string) ||
+        (user.email || '').split('@')[0] ||
+        'Someone';
+
+      let offeredSkillName: string | null = null;
+      try {
+        const { data: offered } = await supabase
+          .from('skills')
+          .select('name')
+          .eq('user_id', user.id)
+          .eq('skill_type', 'teach')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (offered?.name) offeredSkillName = offered.name as any;
+      } catch {
+        // ignore
+      }
+
       const { data: notifData, error: notifErr } = await supabase.from('notifications').insert({
         user_id: skill.user_id,
         type: 'connection_request',
         payload: {
           requester_id: user.id,
           requester_name: requesterName,
-          skill_id: skill.id,
-          skill_name: skill.name,
-          availabilities: avail || [],
+          request_id: reqData && reqData[0] ? (reqData[0] as any).id : null,
+          requested_skill_id: skill.id,
+          requested_skill_name: skill.name,
+          offered_skill_name: offeredSkillName,
+          session_note: opts.note,
+          duration_minutes: opts.durationMinutes || 60,
+          slots: (opts.slots || []).slice(0, 6),
+          // legacy key (older clients)
+          availabilities: (opts.slots || []).slice(0, 6),
+          slots_count: (opts.slots || []).length,
         },
       }).select();
 
@@ -367,7 +477,8 @@ export default function ConnectionsPage() {
       }
       return { request: reqData?.[0] ?? null, notification: notifData?.[0] ?? null };
     } catch (e: any) {
-      const msg = e?.message || JSON.stringify(e || 'Unknown error');
+      const parts = [e?.message, e?.details, e?.hint, e?.code].filter(Boolean);
+      const msg = parts.length ? parts.join(' — ') : (e?.message || JSON.stringify(e || 'Unknown error'));
       console.error('Failed to send swap request', e);
       toast({ title: 'Failed to send request', description: msg });
       return { error: e };
@@ -384,6 +495,8 @@ export default function ConnectionsPage() {
     setAvailModalSkill(skill);
     setAvailabilities([]);
     setNewAvailability('');
+    setSessionNote('');
+    setSessionDurationMinutes(60);
   };
 
   const addAvailability = () => {
@@ -401,18 +514,81 @@ export default function ConnectionsPage() {
     if (!availModalSkill) return;
     // ensure at least one availability
     if (availabilities.length === 0) return toast({ title: 'Add availability', description: 'Please add at least one available time.' });
-    await sendSwapRequest(availModalSkill, availabilities);
+
+    const note = sessionNote.trim();
+    if (!note) return toast({ title: 'Add session note', description: 'Please add a session note for the recipient.' });
+    const duration = Number(sessionDurationMinutes || 0);
+    if (!duration || duration < 15) return toast({ title: 'Invalid duration', description: 'Please set a valid session duration (min 15 minutes).' });
+
+    await sendSwapRequest(availModalSkill, { note, durationMinutes: duration, slots: availabilities });
     setAvailModalSkill(null);
   };
 
-  const acceptRequest = async (req: ConnectionRequest) => {
+  const openAcceptModal = (req: ConnectionRequest) => {
+    setAcceptError('');
+    setAcceptReq(req);
+    const slots = slotsByRequestId[req.id] || [];
+    setAcceptSlotId(slots[0]?.id || '');
+  };
+
+  const startGoogleCalendarConnect = async () => {
     try {
-      const { error: updErr } = await supabase.from('connection_requests').update({ status: 'accepted' }).eq('id', req.id);
-      if (updErr) throw updErr;
-      await supabase.from('conversations').insert({ participant_a: req.requester_id, participant_b: req.recipient_id });
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) throw new Error('Not authenticated');
+
+      const res = await fetch('/api/google/oauth/start', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${token}` },
+      });
+      const json = await res.json();
+      if (!res.ok || !json?.url) throw new Error(json?.error || 'Failed to start Google OAuth');
+      window.location.href = json.url;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Failed to start Google OAuth';
+      toast({ title: 'Google connect failed', description: msg });
+    }
+  };
+
+  const acceptRequest = async () => {
+    if (!acceptReq) return;
+    if (!acceptSlotId) {
+      setAcceptError('Please select a time slot.');
+      return;
+    }
+    setAccepting(true);
+    setAcceptError('');
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) throw new Error('Not authenticated');
+
+      const res = await fetch('/api/sessions/schedule', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ requestId: acceptReq.id, slotId: acceptSlotId }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        if (json?.code === 'GOOGLE_NOT_CONNECTED' || json?.code === 'GOOGLE_TOKEN_MISSING' || json?.code === 'GOOGLE_UNAUTHORIZED') {
+          setAcceptError('Connect Google Calendar to schedule this session.');
+          return;
+        }
+        throw new Error(json?.error || 'Failed to accept and schedule');
+      }
+
+      toast({ title: 'Session scheduled', description: 'Calendar event created with Google Meet link.' });
+      setAcceptReq(null);
+      setAcceptSlotId('');
       void router.refresh();
-    } catch (err) {
-      console.error('Failed to accept request', err);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Failed to accept and schedule';
+      setAcceptError(msg);
+    } finally {
+      setAccepting(false);
     }
   };
 
@@ -420,6 +596,23 @@ export default function ConnectionsPage() {
     try {
       const { error } = await supabase.from('connection_requests').update({ status: 'rejected' }).eq('id', req.id);
       if (error) throw error;
+
+      // Best-effort: notify requester
+      try {
+        const partnerName = profilesById[req.recipient_id]?.full_name || 'Your partner';
+        await supabase.from('notifications').insert({
+          user_id: req.requester_id,
+          type: 'swap_request_rejected',
+          payload: {
+            request_id: req.id,
+            partner_id: req.recipient_id,
+            partner_name: partnerName,
+            skill_id: req.skill_id,
+          },
+        });
+      } catch {
+        // ignore
+      }
       void router.refresh();
     } catch (err) {
       console.error('Failed to reject request', err);
@@ -512,7 +705,7 @@ export default function ConnectionsPage() {
                 <p className="text-skillswap-600 mb-6">Be the first to add a skill or explore others.</p>
                 <div className="flex justify-center gap-3">
                   <Button onClick={() => router.push('/explore')} className="bg-skillswap-500 text-white">Explore Skills</Button>
-                  <Button onClick={() => router.push('/dashboard#skills')} variant="outline">Add a Skill</Button>
+                  <Button onClick={() => router.push('/dashboard/settings')} variant="outline">Add a Skill</Button>
                 </div>
               </Card>
             ) : (
@@ -569,7 +762,7 @@ export default function ConnectionsPage() {
                 <p className="text-skillswap-600 mb-6">Start exploring skills to connect with others.</p>
                 <div className="flex justify-center gap-3">
                   <Button onClick={() => router.push('/explore')} className="bg-skillswap-500 text-white">Explore Skills</Button>
-                  <Button onClick={() => router.push('/dashboard#skills')} variant="outline">Add a Skill</Button>
+                  <Button onClick={() => router.push('/dashboard/settings')} variant="outline">Add a Skill</Button>
                 </div>
               </Card>
             ) : (
@@ -616,7 +809,7 @@ export default function ConnectionsPage() {
                       <div className="ml-2">
                         {c.status === 'pending' && c.request && c.request.recipient_id === user?.id && (
                           <div className="flex gap-2">
-                            <Button onClick={() => acceptRequest(c.request!)} className="bg-skillswap-500 text-white">Accept</Button>
+                            <Button onClick={() => openAcceptModal(c.request!)} className="bg-skillswap-500 text-white">Accept</Button>
                             <Button onClick={() => rejectRequest(c.request!)} variant="outline">Reject</Button>
                           </div>
                         )}
@@ -685,6 +878,10 @@ export default function ConnectionsPage() {
               {/* @ts-ignore */}
               <AvailabilityPicker
                 availabilities={availabilities}
+                note={sessionNote}
+                onNoteChange={setSessionNote}
+                durationMinutes={sessionDurationMinutes}
+                onDurationMinutesChange={setSessionDurationMinutes}
                 onAdd={(s: string) => setAvailabilities((prev) => [...prev, s].slice(0, 6))}
                 onRemove={(i: number) => setAvailabilities((prev) => prev.filter((_, idx) => idx !== i))}
               />
@@ -693,6 +890,70 @@ export default function ConnectionsPage() {
             <div className="mt-4 flex justify-end gap-2">
               <Button variant="outline" onClick={() => setAvailModalSkill(null)}>Cancel</Button>
               <Button onClick={submitAvailabilityRequest} className="bg-skillswap-500 text-white">Send request</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Accept modal: pick slot + schedule */}
+      {acceptReq && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-md bg-white rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold">Accept request</h3>
+              <button onClick={() => setAcceptReq(null)} className="text-sm text-skillswap-600" disabled={accepting}>Close</button>
+            </div>
+
+            <div className="mt-3 space-y-2">
+              <div className="text-sm">
+                <div className="text-xs text-skillswap-600">Session note</div>
+                <div className="text-sm text-skillswap-800">{(acceptReq as any).session_note || '—'}</div>
+              </div>
+              <div className="text-sm">
+                <div className="text-xs text-skillswap-600">Duration</div>
+                <div className="text-sm text-skillswap-800">{(acceptReq as any).duration_minutes ?? 60} minutes</div>
+              </div>
+
+              <div className="mt-2">
+                <div className="text-xs text-skillswap-600 mb-2">Select a time slot</div>
+                <div className="space-y-2 max-h-56 overflow-auto">
+                  {(slotsByRequestId[acceptReq.id] || []).map((s) => {
+                    const label = Number.isNaN(new Date(s.start_at).getTime()) ? s.start_at : new Date(s.start_at).toLocaleString();
+                    return (
+                      <label key={s.id} className="flex items-center gap-2 p-2 rounded border border-skillswap-100 bg-white">
+                        <input
+                          type="radio"
+                          name="acceptSlot"
+                          checked={acceptSlotId === s.id}
+                          onChange={() => setAcceptSlotId(s.id)}
+                        />
+                        <span className="text-sm text-skillswap-800">{label}</span>
+                      </label>
+                    );
+                  })}
+                  {(slotsByRequestId[acceptReq.id] || []).length === 0 ? (
+                    <div className="text-sm text-skillswap-600">No proposed slots found.</div>
+                  ) : null}
+                </div>
+              </div>
+
+              {acceptError ? (
+                <div className="text-sm text-destructive">{acceptError}</div>
+              ) : null}
+            </div>
+
+            <div className="mt-4 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setAcceptReq(null)} disabled={accepting}>Cancel</Button>
+              {acceptError.includes('Connect Google Calendar') ? (
+                <Button variant="outline" onClick={startGoogleCalendarConnect} disabled={accepting}>Connect Google Calendar</Button>
+              ) : null}
+              <Button
+                onClick={acceptRequest}
+                className="bg-skillswap-500 text-white"
+                disabled={accepting || !(slotsByRequestId[acceptReq.id] || []).length || !acceptSlotId}
+              >
+                {accepting ? 'Scheduling…' : 'Accept & Schedule'}
+              </Button>
             </div>
           </div>
         </div>

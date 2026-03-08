@@ -40,11 +40,11 @@ export default function CalendarPopup({ open, onOpenChange, onConfirm, initialDa
 
   const confirm = () => {
     if (!selectedDate) return;
-    const y = selectedDate.getFullYear();
-    const m = String(selectedDate.getMonth() + 1).padStart(2, '0');
-    const d = String(selectedDate.getDate()).padStart(2, '0');
-    const slot = `${y}-${m}-${d} ${time}`;
-    onConfirm(slot);
+    const [hh, mm] = time.split(':').map((x) => Number(x));
+    const dt = new Date(selectedDate);
+    dt.setHours(Number.isFinite(hh) ? hh : 0, Number.isFinite(mm) ? mm : 0, 0, 0);
+    // Store as ISO so server can treat it as timestamptz
+    onConfirm(dt.toISOString());
     onOpenChange(false);
   };
 
