@@ -46,6 +46,7 @@ export default function ConnectionsPage() {
   const [profilesById, setProfilesById] = useState<Record<string, PublicProfile>>({});
   const [skillsByUser, setSkillsByUser] = useState<Record<string, Skill[]>>({});
   const [allSkills, setAllSkills] = useState<Skill[]>([]);
+  const [meProfile, setMeProfile] = useState<PublicProfile | null>(null);
   const [requestsBySkillId, setRequestsBySkillId] = useState<Record<string, ConnectionRequest[]>>({});
   const [completedSessionsBySkillId, setCompletedSessionsBySkillId] = useState<Record<string, any[]>>({});
   const [sendingRequests, setSendingRequests] = useState<Record<string, boolean>>({});
@@ -89,6 +90,17 @@ export default function ConnectionsPage() {
     const run = async () => {
       setLoading(true);
       try {
+        // ensure we have the current user's profile for display names
+        try {
+          const { data: myProf } = await supabase
+            .from('user_profiles')
+            .select('id, full_name, bio')
+            .eq('id', user.id)
+            .maybeSingle();
+          setMeProfile((myProf as any) || null);
+        } catch (e) {
+          console.warn('failed to load current user profile', e);
+        }
         // Fetch connection requests involving user
         const { data: reqData } = await supabase
           .from('connection_requests')
