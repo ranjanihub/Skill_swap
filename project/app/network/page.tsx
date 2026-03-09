@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Home as HomeIcon, Users, Calendar, Bell, Briefcase, MessageSquare, Search, Compass, UserCircle } from 'lucide-react';
@@ -65,7 +65,7 @@ function UserCardAvatar({
   );
 }
 
-export default function NetworkPage() {
+function NetworkInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, loading: authLoading, configError } = useAuth();
@@ -635,5 +635,19 @@ export default function NetworkPage() {
         </div>
       </div>
     </AppShell>
+  );
+}
+
+export default function NetworkPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-background">
+          <div className="w-12 h-12 border-4 border-skillswap-200 border-t-skillswap-500 rounded-full animate-spin" />
+        </div>
+      }
+    >
+      <NetworkInner />
+    </Suspense>
   );
 }

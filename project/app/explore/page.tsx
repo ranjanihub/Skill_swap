@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import {
@@ -17,7 +17,7 @@ import { Users, ArrowLeft } from 'lucide-react';
 
 type PublicProfile = Pick<UserProfile, 'id' | 'full_name' | 'bio'>;
 
-export default function ExplorePage() {
+function ExploreInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const skillQuery = (searchParams?.get('skill') || '').trim();
@@ -302,5 +302,22 @@ export default function ExplorePage() {
         )}
       </main>
     </div>
+  );
+}
+
+export default function ExplorePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-skillswap-100 to-skillswap-50">
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-12 h-12 border-4 border-skillswap-200 border-t-skillswap-500 rounded-full animate-spin" />
+            <p className="text-skillswap-600">Loading explore...</p>
+          </div>
+        </div>
+      }
+    >
+      <ExploreInner />
+    </Suspense>
   );
 }
