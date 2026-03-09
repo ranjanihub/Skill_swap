@@ -11,7 +11,17 @@ export const supabaseConfigError = isSupabaseConfigured
 
 export const supabase = createClient(
   supabaseUrl ?? 'http://localhost:54321',
-  supabaseAnonKey ?? 'public-anon-key'
+  supabaseAnonKey ?? 'public-anon-key',
+  {
+    auth: {
+      // Some browsers/environments can hang indefinitely on `navigator.locks`.
+      // A stuck lock blocks `getSession()` and causes the app to sit on a global spinner.
+      // Using a no-op lock avoids that deadlock at the cost of weaker multi-tab coordination.
+      lock: async (_name, _acquireTimeout, fn) => {
+        return await fn();
+      },
+    },
+  }
 );
 
 export type UserProfile = {

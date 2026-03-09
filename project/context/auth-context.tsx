@@ -102,7 +102,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { data } = await supabase.auth.getSession();
         setSession(data.session);
         setUser(data.session?.user ?? null);
-        await applyGoogleDefaults(data.session?.user ?? null);
+        // Don't block the entire app on profile/settings enrichment.
+        // If the DB is slow/misconfigured, we'd otherwise keep showing a spinner everywhere.
+        void applyGoogleDefaults(data.session?.user ?? null);
       } catch (error) {
         console.error('Failed to get session:', error);
       } finally {
@@ -123,7 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(session?.user ?? null);
       setLoading(false);
       // each time auth state changes we should re-run the defaults
-      await applyGoogleDefaults(session?.user ?? null);
+      void applyGoogleDefaults(session?.user ?? null);
     });
 
     return () => {
