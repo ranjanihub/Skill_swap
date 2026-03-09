@@ -2,17 +2,16 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 
 // simplified home feed layout to match mobile screenshot
 import { Home as HomeIcon, Users, Calendar, Bell, Briefcase, MessageSquare, Search, Compass, UserCircle } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
 import AppShell, { type ShellNavItem } from '@/components/app-shell';
-import AvailabilityPicker from '@/components/calendar/AvailabilityPicker';
 // Matched swaps render inline in the sidebar; no popover needed
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import PostDetail from '@/components/post/PostDetail';
 import {
   isSupabaseConfigured,
   supabase,
@@ -24,6 +23,24 @@ import {
   Notification,
 } from '@/lib/supabase';
 import { formatExactDateTime, formatExactDateTimeWithSeconds } from '@/lib/utils';
+
+const AvailabilityPicker = dynamic(() => import('@/components/calendar/AvailabilityPicker'), {
+  ssr: false,
+});
+
+const PostDetail = dynamic(() => import('@/components/post/PostDetail'), {
+  ssr: false,
+});
+
+const runAfterFirstPaint = (cb: () => void) => {
+  if (typeof window === 'undefined') return;
+  const w = window as any;
+  if (typeof w.requestIdleCallback === 'function') {
+    w.requestIdleCallback(() => cb(), { timeout: 1500 });
+    return;
+  }
+  window.setTimeout(cb, 0);
+};
 
 type PublicProfile = Pick<UserProfile, 'id' | 'full_name' | 'bio' | 'skills_count' | 'swap_points'>;
 
@@ -148,13 +165,12 @@ export default function Home() {
   };
 
   useEffect(() => {
-    void fetchMatchedSwaps();
-  }, []);
-
-  useEffect(() => {
     if (authLoading) return;
     if (!user) return;
-    void loadSidebarCounts();
+    runAfterFirstPaint(() => {
+      void loadSidebarCounts();
+      void fetchMatchedSwaps();
+    });
   }, [authLoading, user?.id]);
 
   // Real-time sidebar synchronization (counts + matches)
@@ -163,21 +179,28 @@ export default function Home() {
     if (!user) return;
     if (!isSupabaseConfigured) return;
 
-    const ch = supabase
-      .channel(`home-sidebar-sync-${user.id}`)
-      // Swaps posted / skill updates can affect matched swaps as well
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'skills' }, () => scheduleSidebarSync())
-      // Swaps (sessions) count changes
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'skill_swap_sessions', filter: `user_a_id=eq.${user.id}` }, () => scheduleSidebarSync())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'skill_swap_sessions', filter: `user_b_id=eq.${user.id}` }, () => scheduleSidebarSync());
+    let cancelled = false;
+    let ch: any;
 
-    ch.subscribe();
+    runAfterFirstPaint(() => {
+      if (cancelled) return;
+      ch = supabase
+        .channel(`home-sidebar-sync-${user.id}`)
+        // Swaps posted / skill updates can affect matched swaps as well
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'skills' }, () => scheduleSidebarSync())
+        // Swaps (sessions) count changes
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'skill_swap_sessions', filter: `user_a_id=eq.${user.id}` }, () => scheduleSidebarSync())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'skill_swap_sessions', filter: `user_b_id=eq.${user.id}` }, () => scheduleSidebarSync());
+
+      ch.subscribe();
+    });
 
     return () => {
+      cancelled = true;
       try {
         if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
         syncTimerRef.current = null;
-        supabase.removeChannel(ch);
+        if (ch) supabase.removeChannel(ch);
       } catch {
         // ignore
       }
@@ -271,7 +294,9 @@ export default function Home() {
       }
     };
 
-    loadDetails();
+    runAfterFirstPaint(() => {
+      void loadDetails();
+    });
   }, [matchedSwaps]);
 
   const publicNav: ShellNavItem[] = [
@@ -399,38 +424,45 @@ export default function Home() {
     if (!user) return;
     if (!isSupabaseConfigured) return;
 
-    const ch = supabase
-      .channel(`notifications-live-${user.id}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
-        (payload) => {
-          try {
-            if (payload.eventType === 'INSERT') {
-              const next = payload.new as Notification;
-              setNotifications((prev) => [next, ...prev].slice(0, 8));
-              return;
+    let cancelled = false;
+    let ch: any;
+
+    runAfterFirstPaint(() => {
+      if (cancelled) return;
+      ch = supabase
+        .channel(`notifications-live-${user.id}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
+          (payload) => {
+            try {
+              if (payload.eventType === 'INSERT') {
+                const next = payload.new as Notification;
+                setNotifications((prev) => [next, ...prev].slice(0, 8));
+                return;
+              }
+              if (payload.eventType === 'UPDATE') {
+                const next = payload.new as Notification;
+                setNotifications((prev) => prev.map((n) => (n.id === next.id ? next : n)).slice(0, 8));
+                return;
+              }
+              if (payload.eventType === 'DELETE') {
+                const oldRow = payload.old as { id?: string };
+                if (!oldRow?.id) return;
+                setNotifications((prev) => prev.filter((n) => n.id !== oldRow.id));
+              }
+            } catch {
+              // ignore
             }
-            if (payload.eventType === 'UPDATE') {
-              const next = payload.new as Notification;
-              setNotifications((prev) => prev.map((n) => (n.id === next.id ? next : n)).slice(0, 8));
-              return;
-            }
-            if (payload.eventType === 'DELETE') {
-              const oldRow = payload.old as { id?: string };
-              if (!oldRow?.id) return;
-              setNotifications((prev) => prev.filter((n) => n.id !== oldRow.id));
-            }
-          } catch {
-            // ignore
           }
-        }
-      )
-      .subscribe();
+        )
+        .subscribe();
+    });
 
     return () => {
+      cancelled = true;
       try {
-        supabase.removeChannel(ch);
+        if (ch) supabase.removeChannel(ch);
       } catch {
         // ignore
       }
@@ -443,29 +475,36 @@ export default function Home() {
     if (!user) return;
     if (!isSupabaseConfigured) return;
 
-    const ch = supabase
-      .channel(`ratings-live-${user.id}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'swap_ratings' }, (payload) => {
-        try {
-          const r: any = payload.new;
-          const ratedId = r?.rated_id as string | undefined;
-          const rating = Number(r?.rating);
-          if (!ratedId || !Number.isFinite(rating)) return;
-          setRatingsByUser((prev) => {
-            const cur = prev[ratedId] || { avg: 0, count: 0 };
-            const nextCount = cur.count + 1;
-            const nextAvg = (cur.avg * cur.count + rating) / nextCount;
-            return { ...prev, [ratedId]: { avg: nextAvg, count: nextCount } };
-          });
-        } catch {
-          // ignore
-        }
-      })
-      .subscribe();
+    let cancelled = false;
+    let ch: any;
+
+    runAfterFirstPaint(() => {
+      if (cancelled) return;
+      ch = supabase
+        .channel(`ratings-live-${user.id}`)
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'swap_ratings' }, (payload) => {
+          try {
+            const r: any = payload.new;
+            const ratedId = r?.rated_id as string | undefined;
+            const rating = Number(r?.rating);
+            if (!ratedId || !Number.isFinite(rating)) return;
+            setRatingsByUser((prev) => {
+              const cur = prev[ratedId] || { avg: 0, count: 0 };
+              const nextCount = cur.count + 1;
+              const nextAvg = (cur.avg * cur.count + rating) / nextCount;
+              return { ...prev, [ratedId]: { avg: nextAvg, count: nextCount } };
+            });
+          } catch {
+            // ignore
+          }
+        })
+        .subscribe();
+    });
 
     return () => {
+      cancelled = true;
       try {
-        supabase.removeChannel(ch);
+        if (ch) supabase.removeChannel(ch);
       } catch {
         // ignore
       }

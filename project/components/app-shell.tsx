@@ -41,6 +41,7 @@ export default function AppShell({
   mobileMenu,
 }: Props) {
   const pathname = usePathname();
+  const { unread } = useNotifications();
   const showMobileBottomNav = !showSidebar && bottomNav.length > 0;
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -70,24 +71,15 @@ export default function AppShell({
             )}
             <div className="relative">
               <Icon className="h-5 w-5" />
-              {/* show unread dot for messages/notifications */}
-              {(() => {
-                try {
-                  const { unread } = useNotifications();
-                  if (item.href === '/messages' && unread.messages > 0) {
-                    return <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />;
-                  }
-                  if (item.href === '/notifications' && unread.notifications > 0) {
-                    return <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />;
-                  }
-                  if (item.href === '/network' && unread.requests > 0) {
-                    return <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />;
-                  }
-                } catch (e) {
-                  return null;
-                }
-                return null;
-              })()}
+              {item.href === '/messages' && unread.messages > 0 ? (
+                <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
+              ) : null}
+              {item.href === '/notifications' && unread.notifications > 0 ? (
+                <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
+              ) : null}
+              {item.href === '/network' && unread.requests > 0 ? (
+                <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
+              ) : null}
             </div>
           </Link>
         );
@@ -121,23 +113,15 @@ export default function AppShell({
                   )}
                   <div className="relative">
                     <Icon className="h-5 w-5" />
-                    {(() => {
-                      try {
-                        const { unread } = useNotifications();
-                        if (item.href === '/messages' && unread.messages > 0) {
-                          return <span className="absolute -top-2 -right-3 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />;
-                        }
-                        if (item.href === '/notifications' && unread.notifications > 0) {
-                          return <span className="absolute -top-2 -right-3 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />;
-                        }
-                        if (item.href === '/network' && unread.requests > 0) {
-                          return <span className="absolute -top-2 -right-3 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />;
-                        }
-                      } catch (e) {
-                        return null;
-                      }
-                      return null;
-                    })()}
+                    {item.href === '/messages' && unread.messages > 0 ? (
+                      <span className="absolute -top-2 -right-3 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
+                    ) : null}
+                    {item.href === '/notifications' && unread.notifications > 0 ? (
+                      <span className="absolute -top-2 -right-3 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
+                    ) : null}
+                    {item.href === '/network' && unread.requests > 0 ? (
+                      <span className="absolute -top-2 -right-3 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
+                    ) : null}
                   </div>
                 </Link>
               );
