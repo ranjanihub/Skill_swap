@@ -85,21 +85,27 @@ function buildMonthGrid(viewMonth: Date) {
 
 function sessionTitle(s: SkillSwapSession) {
   // Keep simple label (Google Calendar-like chips)
+  if (s.status === 'pending_approval') return 'Pending approval';
   if (s.status === 'completed') return 'Completed session';
   if (s.status === 'ongoing') return 'Ongoing session';
   if (s.status === 'cancelled') return 'Cancelled session';
+  if (s.status === 'rejected') return 'Declined session';
   return 'Skill swap session';
 }
 
 function sessionChipClass(s: SkillSwapSession) {
   // Use existing palette primitives only
   switch (s.status) {
+    case 'pending_approval':
+      return 'bg-amber-400 text-amber-900 border border-amber-500';
     case 'completed':
       return 'bg-skillswap-700 text-white';
     case 'ongoing':
       return 'bg-skillswap-600 text-white';
     case 'cancelled':
       return 'bg-skillswap-200 text-skillswap-700';
+    case 'rejected':
+      return 'bg-red-200 text-red-800';
     default:
       return 'bg-skillswap-500 text-white';
   }
@@ -235,8 +241,8 @@ export default function CalendarStandalonePage() {
           .select('*')
           .or(`user_a_id.eq.${user.id},user_b_id.eq.${user.id}`)
           .order('scheduled_at', { ascending: true });
-        // only show sessions that are scheduled
-        setSessions(((data || []) as SkillSwapSession[]).filter((s) => s.status === 'scheduled'));
+        // show scheduled and pending_approval sessions
+        setSessions(((data || []) as SkillSwapSession[]).filter((s) => s.status === 'scheduled' || s.status === 'pending_approval'));
       } catch (e) {
         console.warn('Failed to load sessions', e);
         setSessions([]);
@@ -451,24 +457,33 @@ export default function CalendarStandalonePage() {
 
         setSelectedSession((prev) => (prev && prev.id === rescheduleSessionId ? (data as SkillSwapSession) : prev));
       } else {
-        const { data, error: insertErr } = await supabase
-          .from('skill_swap_sessions')
-          .insert({
-            user_a_id: user.id,
-            user_b_id: partnerId,
-            skill_a_id: mySkillId,
-            skill_b_id: partnerSkillId,
-            status: 'scheduled',
-            scheduled_at: scheduledAtIso,
-            duration_minutes: durationMinutes || 60,
-            notes: notes.trim() ? notes.trim() : null,
-          })
-          .select('*')
-          .single();
-        if (insertErr) throw insertErr;
+        // Use the session request API - creates a pending_approval session
+        const { data: authSession } = await supabase.auth.getSession();
+        const token = authSession.session?.access_token;
+        if (!token) throw new Error('Not authenticated');
 
+        const res = await fetch('/api/sessions/request', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            partnerId,
+            mySkillId: mySkillId,
+            partnerSkillId: partnerSkillId,
+            scheduledAt: scheduledAtIso,
+            durationMinutes: durationMinutes || 60,
+            notes: notes.trim() || null,
+          }),
+        });
+
+        const json = await res.json();
+        if (!res.ok) throw new Error(json?.error || 'Failed to send session request');
+
+        const newSession = json.session as SkillSwapSession;
         setSessions((prev) => {
-          const next = [data as SkillSwapSession, ...prev];
+          const next = [newSession, ...prev];
           next.sort((a, b) => {
             const ta = a.scheduled_at ? new Date(a.scheduled_at).getTime() : 0;
             const tb = b.scheduled_at ? new Date(b.scheduled_at).getTime() : 0;
@@ -856,8 +871,8 @@ export default function CalendarStandalonePage() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create</DialogTitle>
-            <DialogDescription>Schedule a skill swap session.</DialogDescription>
+            <DialogTitle>{rescheduleSessionId ? 'Reschedule' : 'Schedule Session'}</DialogTitle>
+            <DialogDescription>{rescheduleSessionId ? 'Update the session details.' : 'Send a session request to your partner for approval.'}</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
@@ -963,7 +978,7 @@ export default function CalendarStandalonePage() {
               onClick={submitSchedule}
               disabled={savingSchedule || connections.length === 0}
             >
-              {savingSchedule ? 'Saving…' : 'Save'}
+              {savingSchedule ? 'Sending…' : rescheduleSessionId ? 'Save' : 'Send Request'}
             </Button>
           </DialogFooter>
         </DialogContent>

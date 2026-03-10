@@ -110,7 +110,7 @@ export default function ProfilePage() {
     };
 
     void fetchMetadata();
-  }, [profileId, profile?.full_name, settings?.avatar_url, user]);
+  }, [profileId, profile?.full_name, settings?.avatar_url, session?.access_token]);
 
   if (authLoading || loading) {
     return (
@@ -142,31 +142,19 @@ export default function ProfilePage() {
 
       <Card className="p-6 bg-white border-2 border-skillswap-200 space-y-5">
         <div className="flex items-center gap-4">
-          {/* avatar with fallback to Google picture when you're looking at your own profile */}
+          {/* avatar with 3-tier fallback: custom → Google → placeholder */}
           <Avatar className="h-16 w-16 flex-shrink-0">
             <AvatarImage
-              src={
-                settings?.avatar_url ||
-                (user?.id === profileId
-                  ? (user?.user_metadata?.avatar_url as string | undefined)
-                  : undefined) ||
-                ''
-              }
-              alt={
-                profile?.full_name ||
-                (user?.id === profileId && (user?.user_metadata?.full_name as string)) ||
-                'Member'
-              }
+              src={settings?.avatar_url || ''}
+              alt={profile?.full_name || 'User'}
             />
             <AvatarFallback>
-              {(profile?.full_name || (user?.id === profileId && (user?.user_metadata?.full_name as string)) || 'M').slice(0, 1)}
+              {(profile?.full_name || 'U').slice(0, 1)}
             </AvatarFallback>
           </Avatar>
           <div>
             <h2 className="text-xl font-semibold text-skillswap-dark">
-              {profile?.full_name ||
-                (user?.id === profileId && (user?.user_metadata?.full_name as string)) ||
-                'SkillSwap Member'}
+              {profile?.full_name || 'User'}
             </h2>
             <p className="text-skillswap-600">
               {settings?.headline ||

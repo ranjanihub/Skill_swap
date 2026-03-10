@@ -1,13 +1,19 @@
-import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { createClient } from '@supabase/supabase-js';
 
 export async function GET() {
   try {
+    const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+    // If Supabase isn't configured, return an empty list so the UI doesn't show
+    // dev placeholder names.
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      return NextResponse.json([]);
+    }
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
     // Get all skills where users want to learn
     const { data: learnSkills, error: learnError } = await supabase
       .from('skills')
@@ -19,29 +25,6 @@ export async function GET() {
     }
 
     if (!learnSkills || learnSkills.length === 0) {
-      if (process.env.NODE_ENV !== 'production') {
-        const sample = [
-          {
-            skill: 'Data analysis',
-            learner_id: 'dev-learner-1',
-            teacher_id: 'dev-teacher-1',
-            learn_skill_id: 'dev-learn-1',
-            teach_skill_id: 'dev-teach-1',
-            teacher: { full_name: 'Dev Teacher 1', bio: '' },
-            teacher_settings: { headline: 'Data analyst', current_title: null, current_company: null },
-          },
-          {
-            skill: 'UI/UX',
-            learner_id: 'dev-learner-2',
-            teacher_id: 'dev-teacher-2',
-            learn_skill_id: 'dev-learn-2',
-            teach_skill_id: 'dev-teach-2',
-            teacher: { full_name: 'Dev Teacher 2', bio: '' },
-            teacher_settings: { headline: 'UX designer', current_title: null, current_company: null },
-          },
-        ];
-        return NextResponse.json(sample);
-      }
       return NextResponse.json([]);
     }
 
@@ -75,29 +58,8 @@ export async function GET() {
       }
     }
 
-    // If there are no matches in the database, return a small dev-only sample
-    if ((!matches || matches.length === 0) && process.env.NODE_ENV !== 'production') {
-      const sample = [
-        {
-          skill: 'Data analysis',
-          learner_id: 'dev-learner-1',
-          teacher_id: 'dev-teacher-1',
-          learn_skill_id: 'dev-learn-1',
-          teach_skill_id: 'dev-teach-1',
-          teacher: { full_name: 'Dev Teacher 1', bio: '' },
-          teacher_settings: { headline: 'Data analyst', current_title: null, current_company: null },
-        },
-        {
-          skill: 'UI/UX',
-          learner_id: 'dev-learner-2',
-          teacher_id: 'dev-teacher-2',
-          learn_skill_id: 'dev-learn-2',
-          teach_skill_id: 'dev-teach-2',
-          teacher: { full_name: 'Dev Teacher 2', bio: '' },
-          teacher_settings: { headline: 'UX designer', current_title: null, current_company: null },
-        },
-      ];
-      return NextResponse.json(sample);
+    if (!matches || matches.length === 0) {
+      return NextResponse.json([]);
     }
 
     // attach teacher profile data for all matches so client can render the name directly
@@ -112,6 +74,18 @@ export async function GET() {
         profilesData.forEach((p: any) => (map[p.id] = p));
         matches.forEach((m) => {
           m.teacher = map[m.teacher_id] || null;
+        });
+      }
+
+      const { data: settingsData, error: settingsError } = await supabase
+        .from('user_settings')
+        .select('id, headline, current_title, current_company, avatar_url, display_name, username')
+        .in('id', teacherIds);
+      if (!settingsError && settingsData) {
+        const sMap: Record<string, any> = {};
+        settingsData.forEach((s: any) => (sMap[s.id] = s));
+        matches.forEach((m) => {
+          m.teacher_settings = sMap[m.teacher_id] || m.teacher_settings || null;
         });
       }
     }

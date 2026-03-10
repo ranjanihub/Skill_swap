@@ -26,12 +26,17 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 type PublicProfile = Pick<UserProfile, 'id' | 'full_name' | 'bio'>;
 
-type ConnectionData = { profile: PublicProfile; settings?: any };
+type PublicSettings = Pick<
+  UserSettings,
+  'headline' | 'current_title' | 'current_company' | 'avatar_url' | 'display_name' | 'username'
+>;
+
+type ConnectionData = { profile: PublicProfile; settings?: PublicSettings | null };
 
 type InvItem = {
   request: ConnectionRequest;
   requesterProfile?: PublicProfile | null;
-  requesterSettings?: Pick<UserSettings, 'headline' | 'current_title' | 'current_company' | 'avatar_url'> | null;
+  requesterSettings?: PublicSettings | null;
 };
 
 // helper to render an avatar+name pair with fallback metadata support
@@ -136,7 +141,7 @@ function NetworkInner() {
           requesterIds.length
             ? supabase
                 .from('user_settings')
-                .select('id, headline, current_title, current_company, avatar_url')
+                .select('id, headline, current_title, current_company, avatar_url, display_name, username')
                 .in('id', requesterIds)
             : Promise.resolve({ data: [] as any[] } as any),
         ]);
@@ -200,7 +205,7 @@ function NetworkInner() {
         supabase.from('user_profiles').select('id, full_name, bio').eq('id', requesterId).maybeSingle(),
         supabase
           .from('user_settings')
-          .select('id, headline, current_title, current_company, avatar_url')
+          .select('id, headline, current_title, current_company, avatar_url, display_name, username')
           .eq('id', requesterId)
           .maybeSingle(),
       ]);
@@ -296,8 +301,8 @@ function NetworkInner() {
         const [{ data: profiles }, { data: settings }] = await Promise.all([
           supabase.from('user_profiles').select('id, full_name, bio').in('id', otherIds),
           supabase
-            .from('user_settings')
-            .select('id, headline, current_title, current_company, avatar_url')
+                    .from('user_settings')
+                    .select('id, headline, current_title, current_company, avatar_url, display_name, username')
             .in('id', otherIds),
         ]);
         const settingsById: Record<string, any> = {};
@@ -406,8 +411,8 @@ function NetworkInner() {
       }
       headerLeft={
         <div className="w-full flex items-center gap-3 min-w-0">
-          <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
-            <Image src="/SkillSwap_Logo.jpg" alt="SkillSwap" width={40} height={40} className="object-cover" />
+          <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 bg-white p-1 flex items-center justify-center">
+            <Image src="/SkillSwap_Logo.jpg" alt="SkillSwap" width={32} height={32} className="object-contain" />
           </div>
 
           <div className="flex-1 min-w-0 flex justify-center">
@@ -484,11 +489,13 @@ function NetworkInner() {
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {connectionsData.map((u) => {
+                      const connectionDisplayName =
+                        u.settings?.display_name || u.settings?.username || u.profile.full_name;
                       return (
                         <Card key={u.profile.id} className="p-4">
                           <UserCardAvatar
                             userId={u.profile.id}
-                            explicitName={u.profile.full_name}
+                            explicitName={connectionDisplayName}
                             explicitAvatar={u.settings?.avatar_url as string | null}
                           >
                             {u.settings?.headline || u.settings?.current_title ? (
@@ -575,6 +582,10 @@ function NetworkInner() {
                       {filteredInvitations.map((i) => {
                         const req = i.request;
                         const busy = Boolean(acting[req.id]);
+                        const inviterDisplayName =
+                          i.requesterSettings?.display_name ||
+                          i.requesterSettings?.username ||
+                          i.requesterProfile?.full_name;
                         const title =
                           i.requesterSettings?.headline ||
                           (i.requesterSettings?.current_title
@@ -586,7 +597,7 @@ function NetworkInner() {
                             <div>
                               <UserCardAvatar
                                 userId={i.requesterProfile?.id || req.requester_id}
-                                explicitName={i.requesterProfile?.full_name}
+                                explicitName={inviterDisplayName}
                                 explicitAvatar={i.requesterSettings?.avatar_url as string | null}
                                 className="h-14 w-full"
                               />

@@ -201,7 +201,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
             <Avatar className="h-9 w-9">
               <AvatarImage
-                src={(user?.user_metadata?.avatar_url as string | undefined) || ''}
+                src={avatarUrl}
                 alt={displayName}
               />
               <AvatarFallback>{initials(displayName)}</AvatarFallback>

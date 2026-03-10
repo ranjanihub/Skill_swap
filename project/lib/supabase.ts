@@ -52,7 +52,7 @@ export type SkillSwapSession = {
   user_b_id: string;
   skill_a_id: string;
   skill_b_id: string;
-  status: 'scheduled' | 'ongoing' | 'completed' | 'cancelled';
+  status: 'pending_approval' | 'scheduled' | 'ongoing' | 'completed' | 'cancelled' | 'rejected';
   scheduled_at: string | null;
   duration_minutes: number;
   notes: string | null;

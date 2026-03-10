@@ -108,7 +108,14 @@ export default function SettingsPage() {
 
   const isMissingTableSchemaCacheError = (msg?: string) => {
     if (!msg) return false;
-    return msg.includes('does not exist') || msg.includes('missing') || msg.includes('relation');
+    const m = msg.toLowerCase();
+    // PostgREST / Supabase schema cache missing table errors commonly look like:
+    // "Could not find the table 'public.<table>' in the schema cache"
+    if (m.includes('could not find the table') && m.includes('schema cache')) return true;
+    if (m.includes('not found in the schema cache')) return true;
+    // Postgres relation missing errors
+    if (m.includes('relation') && m.includes('does not exist')) return true;
+    return false;
   };
 
   const ensureUserProfileRow = async () => {
@@ -934,7 +941,7 @@ export default function SettingsPage() {
         </div>
 
         <div className="pt-4 border-t border-skillswap-100">
-          <h3 className="text-lg font-semibold text-skillswap-dark">Professional / LinkedIn-like info</h3>
+          <h3 className="text-lg font-semibold text-skillswap-dark">Professional Info</h3>
           <p className="text-sm text-skillswap-600">Add a headline about your background.</p>
 
           <div className="mt-3">

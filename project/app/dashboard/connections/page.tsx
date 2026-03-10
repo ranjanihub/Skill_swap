@@ -16,13 +16,32 @@ import {
   supabaseConfigError,
   Skill,
   UserProfile,
+  UserSettings,
   ConnectionRequest,
 } from '@/lib/supabase';
 import { cn, formatExactDateTime, formatExactDateTimeWithSeconds } from '@/lib/utils';
 import AppShell, { type ShellNavItem } from '@/components/app-shell';
 import AvailabilityPicker from '@/components/calendar/AvailabilityPicker';
+import { useUserIdentity } from '@/hooks/use-user-identity';
 
 type PublicProfile = Pick<UserProfile, 'id' | 'full_name' | 'bio'>;
+type PublicSettings = Pick<UserSettings, 'avatar_url' | 'display_name'>;
+
+/** Avatar with 3-tier fallback for connection cards */
+function ConnAvatar({ userId, explicitName, explicitAvatar, size = 'h-12 w-12' }: {
+  userId: string;
+  explicitName?: string | null;
+  explicitAvatar?: string | null;
+  size?: string;
+}) {
+  const { name, avatarUrl } = useUserIdentity(userId, explicitName, explicitAvatar);
+  return (
+    <Avatar className={size}>
+      <AvatarImage src={avatarUrl ?? ''} alt={name || 'User'} />
+      <AvatarFallback>{(name || 'U').slice(0, 2)}</AvatarFallback>
+    </Avatar>
+  );
+}
 
 type ConnectionItem = {
   otherId: string;
@@ -44,6 +63,7 @@ export default function ConnectionsPage() {
 
   const [connections, setConnections] = useState<ConnectionItem[]>([]);
   const [profilesById, setProfilesById] = useState<Record<string, PublicProfile>>({});
+  const [settingsById, setSettingsById] = useState<Record<string, PublicSettings>>({});
   const [skillsByUser, setSkillsByUser] = useState<Record<string, Skill[]>>({});
   const [allSkills, setAllSkills] = useState<Skill[]>([]);
   const [meProfile, setMeProfile] = useState<PublicProfile | null>(null);
@@ -216,6 +236,19 @@ export default function ConnectionsPage() {
 
         const profileMap: Record<string, PublicProfile> = {};
         profiles.forEach((p) => (profileMap[p.id] = p));
+
+        // Fetch avatar/display_name from user_settings
+        let settingsMap: Record<string, PublicSettings> = {};
+        if (ids.length > 0) {
+          const { data: settingsData } = await supabase
+            .from('user_settings')
+            .select('id, avatar_url, display_name')
+            .in('id', ids);
+          (settingsData || []).forEach((s: any) => {
+            settingsMap[s.id] = { avatar_url: s.avatar_url, display_name: s.display_name };
+          });
+        }
+        setSettingsById(settingsMap);
 
         // Build connections list
         const map: Record<string, ConnectionItem> = {};
@@ -725,10 +758,11 @@ export default function ConnectionsPage() {
                 {displayedAllSkills.map((s) => (
                   <Card key={s.id} className="p-4 bg-white rounded-lg shadow-sm flex items-center justify-between">
                     <div className="flex items-center gap-4">
-                      <Avatar className="h-12 w-12">
-                        <AvatarImage src="" alt={s.name} />
-                        <AvatarFallback>{(profilesById[s.user_id]?.full_name || 'M').slice(0,2)}</AvatarFallback>
-                      </Avatar>
+                      <ConnAvatar
+                        userId={s.user_id}
+                        explicitName={settingsById[s.user_id]?.display_name || profilesById[s.user_id]?.full_name}
+                        explicitAvatar={settingsById[s.user_id]?.avatar_url}
+                      />
                       <div>
                         <div className="flex items-center gap-2">
                           <h3 className="font-semibold text-skillswap-dark">{s.name}</h3>
@@ -782,13 +816,14 @@ export default function ConnectionsPage() {
                 {filtered.map((c) => (
                   <Card key={c.otherId} className="p-4 bg-white rounded-lg shadow-sm flex items-center justify-between">
                     <div className="flex items-center gap-4">
-                      <Avatar className="h-12 w-12">
-                        <AvatarImage src="" alt={c.profile?.full_name || 'Member'} />
-                        <AvatarFallback>{(c.profile?.full_name || 'M').slice(0,2)}</AvatarFallback>
-                      </Avatar>
+                      <ConnAvatar
+                        userId={c.otherId}
+                        explicitName={settingsById[c.otherId]?.display_name || c.profile?.full_name}
+                        explicitAvatar={settingsById[c.otherId]?.avatar_url}
+                      />
                       <div>
                         <div className="flex items-center gap-2">
-                          <h3 className="font-semibold text-skillswap-dark">{c.profile?.full_name || 'SkillSwap member'}</h3>
+                          <h3 className="font-semibold text-skillswap-dark">{settingsById[c.otherId]?.display_name || c.profile?.full_name || 'User'}</h3>
                           <Badge variant="outline">{c.status}</Badge>
                         </div>
                         <p className="text-sm text-skillswap-600">{c.skills.slice(0,3).map((s) => s.name).join(' • ') || 'No listed skills'}</p>
@@ -841,9 +876,13 @@ export default function ConnectionsPage() {
           {selected ? (
             <Card className="p-4 bg-white sticky top-6">
               <div className="flex items-center gap-3">
-                <Avatar className="h-12 w-12"><AvatarImage src="" alt={profilesById[selected]?.full_name || ''} /><AvatarFallback>{(profilesById[selected]?.full_name || 'M').slice(0,2)}</AvatarFallback></Avatar>
+                <ConnAvatar
+                  userId={selected}
+                  explicitName={settingsById[selected]?.display_name || profilesById[selected]?.full_name}
+                  explicitAvatar={settingsById[selected]?.avatar_url}
+                />
                 <div>
-                  <h3 className="font-semibold">{profilesById[selected]?.full_name || 'Member'}</h3>
+                  <h3 className="font-semibold">{settingsById[selected]?.display_name || profilesById[selected]?.full_name || 'User'}</h3>
                   <p className="text-sm text-skillswap-600">{profilesById[selected]?.bio || ''}</p>
                 </div>
               </div>

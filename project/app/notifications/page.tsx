@@ -159,6 +159,67 @@ function buildNotifView(n: Notification, opts: { routerPush: (href: string) => v
     };
   }
 
+  if (type === 'session_request') {
+    const details: string[] = [];
+    if (skillName) details.push(`Skill: ${skillName}`);
+    if (scheduledAt) details.push(`When: ${scheduledAt}`);
+    if (durationMinutes) details.push(`Duration: ${durationMinutes} min`);
+
+    const convId = payload.conversation_id as string | undefined;
+
+    return {
+      icon: Clock,
+      title: 'Session request received',
+      body: partnerName
+        ? `${partnerName} requested a skill swap session.`
+        : 'You received a session request.',
+      details,
+      href: '/messages',
+      primaryAction: { label: 'View in chat', onClick: () => push(convId ? '/messages' : '/messages') },
+      secondaryAction: { label: 'View calendar', onClick: () => push('/calendar') },
+    };
+  }
+
+  if (type === 'session_confirmed') {
+    const details: string[] = [];
+    if (skillName) details.push(`Skill: ${skillName}`);
+    if (scheduledAt) details.push(`When: ${scheduledAt}`);
+    if (durationMinutes) details.push(`Duration: ${durationMinutes} min`);
+    details.push(meetAvailable ? 'Meet link: ready' : 'Meet link: not available yet');
+
+    return {
+      icon: CheckCircle2,
+      title: 'Session confirmed',
+      body: partnerName ? `Your session with ${partnerName} has been confirmed!` : 'Your session has been confirmed!',
+      details,
+      href: '/calendar',
+      primaryAction: meetAvailable
+        ? {
+            label: 'Join session',
+            onClick: () => {
+              if (meetLink) window.open(meetLink, '_blank', 'noopener,noreferrer');
+            },
+          }
+        : { label: 'View session', onClick: () => push('/calendar') },
+      secondaryAction: { label: 'Open chat', onClick: () => push('/messages') },
+    };
+  }
+
+  if (type === 'session_declined') {
+    const details: string[] = [];
+    if (scheduledAt) details.push(`Was scheduled for: ${scheduledAt}`);
+
+    return {
+      icon: Clock,
+      title: 'Session declined',
+      body: partnerName ? `${partnerName} declined your session request.` : 'Your session request was declined.',
+      details,
+      href: '/calendar',
+      primaryAction: { label: 'View calendar', onClick: () => push('/calendar') },
+      secondaryAction: { label: 'Open chat', onClick: () => push('/messages') },
+    };
+  }
+
   if (type === 'session_reminder') {
     const details: string[] = [];
     if (skillName) details.push(`Skill: ${skillName}`);
@@ -364,8 +425,8 @@ export default function NotificationsPage() {
       ]}
       headerLeft={
         <div className="w-full flex items-center gap-3 min-w-0">
-          <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
-            <Image src="/SkillSwap_Logo.jpg" alt="SkillSwap" width={40} height={40} className="object-cover" />
+          <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 bg-white p-1 flex items-center justify-center">
+            <Image src="/SkillSwap_Logo.jpg" alt="SkillSwap" width={32} height={32} className="object-contain" />
           </div>
           <div className="flex-1 min-w-0 flex justify-center">
             <div className="w-full max-w-2xl relative">

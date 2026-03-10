@@ -23,6 +23,7 @@ import {
   Notification,
 } from '@/lib/supabase';
 import { formatExactDateTime, formatExactDateTimeWithSeconds } from '@/lib/utils';
+import { useUserIdentity } from '@/hooks/use-user-identity';
 
 const AvailabilityPicker = dynamic(() => import('@/components/calendar/AvailabilityPicker'), {
   ssr: false,
@@ -50,6 +51,32 @@ type FeedOwner = {
   settings?: Pick<UserSettings, 'avatar_url' | 'headline' | 'current_title' | 'current_company'> | null;
   skills: Skill[];
 };
+
+/** Avatar+name for any user with 3-tier fallback (custom → OAuth → placeholder) */
+function UserAvatar({ userId, explicitName, explicitAvatar, size = 'h-12 w-12' }: {
+  userId: string;
+  explicitName?: string | null;
+  explicitAvatar?: string | null;
+  size?: string;
+}) {
+  const { name, avatarUrl } = useUserIdentity(userId, explicitName, explicitAvatar);
+  return (
+    <Avatar className={size}>
+      <AvatarImage src={avatarUrl ?? ''} alt={name || 'User'} />
+      <AvatarFallback>{(name || 'U').slice(0, 1)}</AvatarFallback>
+    </Avatar>
+  );
+}
+
+function UserName({ userId, explicitName, explicitAvatar, fallback = 'User' }: {
+  userId: string;
+  explicitName?: string | null;
+  explicitAvatar?: string | null;
+  fallback?: string;
+}) {
+  const { name } = useUserIdentity(userId, explicitName, explicitAvatar);
+  return <>{name || fallback}</>;
+}
 
 export default function Home() {
   const { user, loading: authLoading, configError } = useAuth();
@@ -84,7 +111,7 @@ export default function Home() {
   const [matchedSwaps, setMatchedSwaps] = useState([]);
   const [matchedDetails, setMatchedDetails] = useState<Array<any>>([]);
   const [ratingsByUser, setRatingsByUser] = useState<Record<string, { avg: number; count: number }>>({});
-  const [sidebarCounts, setSidebarCounts] = useState<{ swaps: number; posted: number }>({ swaps: 0, posted: 0 });
+  const [sidebarCounts, setSidebarCounts] = useState<{ swaps: number; posted: number; connections: number; swapRequests: number }>({ swaps: 0, posted: 0, connections: 0, swapRequests: 0 });
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [selectedPostFallback, setSelectedPostFallback] = useState<any | null>(null);
@@ -136,7 +163,7 @@ export default function Home() {
     if (!user) return;
     if (!isSupabaseConfigured) return;
     try {
-      const [{ count: swapsCount }, { count: postedCount }] = await Promise.all([
+      const [{ count: swapsCount }, { count: postedCount }, { count: connectionsCount }, { count: swapRequestsCount }] = await Promise.all([
         supabase
           .from('skill_swap_sessions')
           .select('id', { count: 'exact', head: true })
@@ -145,11 +172,23 @@ export default function Home() {
           .from('skills')
           .select('id', { count: 'exact', head: true })
           .eq('user_id', user.id),
+        supabase
+          .from('connection_requests')
+          .select('id', { count: 'exact', head: true })
+          .or(`requester_id.eq.${user.id},recipient_id.eq.${user.id}`)
+          .eq('status', 'accepted'),
+        supabase
+          .from('connection_requests')
+          .select('id', { count: 'exact', head: true })
+          .or(`requester_id.eq.${user.id},recipient_id.eq.${user.id}`)
+          .eq('status', 'pending'),
       ]);
 
       setSidebarCounts({
         swaps: typeof swapsCount === 'number' ? swapsCount : 0,
         posted: typeof postedCount === 'number' ? postedCount : 0,
+        connections: typeof connectionsCount === 'number' ? connectionsCount : 0,
+        swapRequests: typeof swapRequestsCount === 'number' ? swapRequestsCount : 0,
       });
     } catch (e) {
       console.warn('Failed to load sidebar counts', e);
@@ -216,6 +255,34 @@ export default function Home() {
     return map;
   }, [matchedSwaps]);
 
+  const notificationSavedSkills = useMemo(() => {
+    const seen = new Set<string>();
+    const out: Array<{ id: string; name: string; created_at: string; type: string }> = [];
+
+    for (const n of (notifications || []) as any[]) {
+      const payload = (n?.payload || {}) as Record<string, any>;
+      const skillName = payload.skill_name || payload.requested_skill_name || payload.skill;
+      if (!skillName) continue;
+      const name = String(skillName).trim();
+      if (!name) continue;
+
+      const key = name.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      out.push({
+        id: String(n.id || name),
+        name,
+        created_at: String(n.created_at || ''),
+        type: String(n.type || ''),
+      });
+
+      if (out.length >= 6) break;
+    }
+
+    return out;
+  }, [notifications]);
+
   useEffect(() => {
     const loadDetails = async () => {
       if (!matchedSwaps || matchedSwaps.length === 0) {
@@ -257,7 +324,7 @@ export default function Home() {
       try {
         const results = await Promise.all([
           supabase.from('user_profiles').select('id, full_name, bio').in('id', teacherIds),
-          supabase.from('user_settings').select('id, headline, current_title, current_company').in('id', teacherIds),
+          supabase.from('user_settings').select('id, headline, current_title, current_company, display_name, username').in('id', teacherIds),
           supabase.from('skills').select('id, name, proficiency_level, user_id').in('id', teachSkillIds),
         ]);
 
@@ -768,7 +835,7 @@ export default function Home() {
           meProfile?.full_name ||
           (user.user_metadata?.full_name as string) ||
           (user.email || '').split('@')[0] ||
-          'Someone';
+          'User';
 
         let offeredSkillName: string | null = null;
         try {
@@ -869,14 +936,11 @@ export default function Home() {
         <div className="feed-card p-4">
           <div className="flex items-center gap-3">
             <div className="w-16 h-16 rounded-full overflow-hidden">
-              <Avatar className="h-16 w-16">
-                <AvatarImage src={meSettings?.avatar_url || (user?.user_metadata?.avatar_url as string | undefined) || ''} alt={meProfile?.full_name || 'Member'} />
-                <AvatarFallback>{(meProfile?.full_name || user?.user_metadata?.full_name || 'S').slice(0, 1)}</AvatarFallback>
-              </Avatar>
+              <UserAvatar userId={user?.id || ''} explicitName={meProfile?.full_name} explicitAvatar={meSettings?.avatar_url as string | null} size="h-16 w-16" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-skillswap-800">{meProfile?.full_name || (user?.user_metadata?.full_name as string) || 'SkillSwap member'}</h2>
-              <p className="text-sm text-skillswap-600">{meSettings?.headline || meSettings?.current_title || (user?.user_metadata?.role as string) || 'Complete your profile to get better matches'}</p>
+              <h2 className="text-lg font-semibold text-skillswap-800"><UserName userId={user?.id || ''} explicitName={meProfile?.full_name} /></h2>
+              <p className="text-sm text-skillswap-600">{meSettings?.headline || meSettings?.current_title || 'Complete your profile to get better matches'}</p>
             </div>
           </div>
         </div>
@@ -927,8 +991,8 @@ export default function Home() {
       ]}
       headerLeft={
         <div className="w-full flex items-center gap-3 min-w-0">
-          <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
-            <Image src="/SkillSwap_Logo.jpg" alt="SkillSwap" width={40} height={40} className="object-cover" />
+          <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 bg-white p-1 flex items-center justify-center">
+            <Image src="/SkillSwap_Logo.jpg" alt="SkillSwap" width={32} height={32} className="object-contain" />
           </div>
 
           <div className="flex-1 min-w-0 flex justify-center">
@@ -940,7 +1004,7 @@ export default function Home() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />
-              <Search className="absolute left-3 top-2.5 h-5 w-5 text-skillswap-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-skillswap-400 pointer-events-none" />
             </div>
           </div>
 
@@ -971,15 +1035,12 @@ export default function Home() {
           <div className="feed-card">
               <div className="flex items-center gap-3">
                 <div className="w-16 h-16 rounded-full overflow-hidden">
-                  <Avatar className="h-16 w-16">
-                    <AvatarImage src={meSettings?.avatar_url || (user?.user_metadata?.avatar_url as string | undefined) || ''} alt={meProfile?.full_name || 'Member'} />
-                    <AvatarFallback>{(meProfile?.full_name || user?.user_metadata?.full_name || 'S').slice(0, 1)}</AvatarFallback>
-                  </Avatar>
+                  <UserAvatar userId={user?.id || ''} explicitName={meProfile?.full_name} explicitAvatar={meSettings?.avatar_url as string | null} size="h-16 w-16" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold text-skillswap-800">{meProfile?.full_name || (user?.user_metadata?.full_name as string) || 'SkillSwap member'}</h2>
+                  <h2 className="text-lg font-semibold text-skillswap-800"><UserName userId={user?.id || ''} explicitName={meProfile?.full_name} /></h2>
                   <p className="text-sm text-skillswap-600">
-                    {meSettings?.headline || meSettings?.current_title || (user?.user_metadata?.role as string) || 'Complete your profile to get better matches'}
+                    {meSettings?.headline || meSettings?.current_title || 'Complete your profile to get better matches'}
                   </p>
                 </div>
               </div>
@@ -1018,7 +1079,27 @@ export default function Home() {
               </div>
 
               {matchedDetails.length === 0 ? (
-                <div className="ml-1 text-xs text-skillswap-500">No matches yet</div>
+                notificationSavedSkills.length === 0 ? (
+                  <div className="ml-1 text-xs text-skillswap-500">No matches yet</div>
+                ) : (
+                  <div className="mt-2 space-y-2">
+                    {notificationSavedSkills.map((s) => (
+                      <div key={s.id} className="bg-white border border-skillswap-200 rounded-lg px-3 py-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium text-skillswap-800 truncate">{s.name}</div>
+                            {s.type ? <div className="text-[11px] text-skillswap-500 truncate">{s.type}</div> : null}
+                          </div>
+                          {s.created_at ? (
+                            <time className="text-[11px] text-skillswap-500 flex-shrink-0" dateTime={s.created_at}>
+                              {formatExactDateTime(s.created_at)}
+                            </time>
+                          ) : null}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
               ) : (
                 <div className="mt-2 space-y-3">
                   {matchedDetails.slice(0, 6).map((m) => (
@@ -1026,12 +1107,10 @@ export default function Home() {
                       <div className="flex items-start justify-between">
                         <div className="flex items-start gap-3">
                           <div className="w-12 h-12 rounded-full overflow-hidden">
-                            <Avatar className="h-12 w-12">
-                              <AvatarFallback>{String(m.teacher?.full_name || 'SkillSwap member').slice(0, 1)}</AvatarFallback>
-                            </Avatar>
+                            <UserAvatar userId={m.teacher_id} explicitName={m.teacher?.full_name} explicitAvatar={m.teacherSettings?.avatar_url as string | null} />
                           </div>
                           <div>
-                            <div className="font-semibold text-sm text-skillswap-800">{m.teacher?.full_name || 'SkillSwap member'}</div>
+                            <div className="font-semibold text-sm text-skillswap-800"><UserName userId={m.teacher_id} explicitName={m.teacher?.full_name} /></div>
                             {m.teacher_id && ratingsByUser[m.teacher_id] ? (
                               <div className="text-xs text-skillswap-500 mt-0.5">★ {ratingsByUser[m.teacher_id].avg.toFixed(1)} ({ratingsByUser[m.teacher_id].count})</div>
                             ) : null}
@@ -1107,7 +1186,11 @@ export default function Home() {
 
               <div className="mt-3 grid grid-cols-1 gap-3">
                 {matchedDetails.slice(0, 6).map((m) => {
-                  const name = m.teacher?.full_name || 'SkillSwap member';
+                  const name =
+                    m.teacherSettings?.display_name ||
+                    m.teacherSettings?.username ||
+                    m.teacher?.full_name ||
+                    'User';
                   const subtitle = m.teacherSettings?.headline || m.teacherSettings?.current_title || m.teacherSettings?.current_company || m.teacher?.bio || '';
                   const skillName = m.teachSkill?.name || m.skill || 'Skill';
                   const prof = m.teachSkill?.proficiency_level || '';
@@ -1117,9 +1200,7 @@ export default function Home() {
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex items-start gap-3 min-w-0">
                           <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
-                            <Avatar className="h-10 w-10">
-                              <AvatarFallback>{String(name).slice(0, 1)}</AvatarFallback>
-                            </Avatar>
+                            <UserAvatar userId={m.teacher_id} explicitName={m.teacherSettings?.display_name || m.teacherSettings?.username || m.teacher?.full_name} explicitAvatar={m.teacherSettings?.avatar_url as string | null} size="h-10 w-10" />
                           </div>
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">
@@ -1223,17 +1304,14 @@ export default function Home() {
                   <article key={`${g.owner.id}-${gi}-${g.ts || ''}`} className="feed-card">
                     <div className="flex items-start gap-3">
                       <div className="w-12 h-12 rounded-full overflow-hidden">
-                        <Avatar className="h-12 w-12">
-                          <AvatarImage src={(g.owner.settings?.avatar_url as string | undefined) || ''} alt={g.owner.profile?.full_name || g.owner.id} />
-                          <AvatarFallback>{(g.owner.profile?.full_name || g.owner.id).slice(0, 1)}</AvatarFallback>
-                        </Avatar>
+                        <UserAvatar userId={g.owner.id} explicitName={g.owner.profile?.full_name} explicitAvatar={g.owner.settings?.avatar_url as string | null} />
                       </div>
 
                       <div className="flex-1">
                         <div className="flex items-center justify-between">
                           <div>
                             <h3 className="font-semibold text-skillswap-800">
-                              {g.owner.profile?.full_name || g.owner.id || 'SkillSwap member'}
+                              <UserName userId={g.owner.id} explicitName={g.owner.profile?.full_name} />
                             </h3>
                             {ratingsByUser[g.owner.id] ? (
                               <div className="text-xs text-skillswap-500 mt-0.5">★ {ratingsByUser[g.owner.id].avg.toFixed(1)} ({ratingsByUser[g.owner.id].count})</div>
@@ -1247,7 +1325,6 @@ export default function Home() {
                             {g.ts ? formatExactDateTime(g.ts) : ''}
                           </time>
                         </div>
-                        <p className="text-sm text-skillswap-600">{g.owner.settings?.headline || g.owner.profile?.bio || g.owner.id || 'SkillSwap member'}</p>
 
                         <div className="mt-3 text-sm text-skillswap-700">
                           <p className="font-medium text-skillswap-800">Skills</p>
@@ -1302,32 +1379,60 @@ export default function Home() {
           )}
         </section>
 
-        {/* Right column - news (desktop only) */}
+        {/* Right column - stats & recommendations (desktop only) */}
         <aside className="hidden lg:block">
           <div className="feed-card">
-            <h3 className="text-lg font-semibold text-skillswap-800">Notifications</h3>
-            <p className="text-sm text-skillswap-600 mt-2">Recent</p>
-            {notifications.length === 0 ? (
-              <p className="mt-3 text-sm text-skillswap-500">No notifications yet.</p>
-            ) : (
-              <ul className="mt-3 space-y-3">
-                {notifications.map((n) => (
-                  <li key={n.id} className="text-sm">
-                    <div className="font-medium text-skillswap-800">{n.type}</div>
-                    <time
-                      className="text-xs text-skillswap-500 mt-1 block"
-                      dateTime={n.created_at}
-                      title={formatExactDateTimeWithSeconds(n.created_at)}
-                    >
-                      {formatExactDateTime(n.created_at)}
-                    </time>
-                    <div className="text-xs text-skillswap-500 mt-1">
-                      {n.read ? 'Read' : 'Unread'}
+            {/* Stats row */}
+            <div className="flex gap-6">
+              <div>
+                <div className="text-2xl font-bold text-skillswap-700">{sidebarCounts.swapRequests}</div>
+                <div className="text-sm text-skillswap-600">Swap Request</div>
+              </div>
+            </div>
+
+            {/* Recommended swaps */}
+            <div className="mt-5 border-t border-skillswap-200 pt-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-skillswap-600">
+                  {matchedDetails.length} Swap profile recommended for you
+                </p>
+                {matchedDetails.length > 0 && (
+                  <button
+                    onClick={() => setShowMatchedSwapsCenter(true)}
+                    className="text-xs font-medium text-skillswap-600 border border-skillswap-300 rounded-full px-3 py-1 hover:bg-skillswap-50 transition-colors"
+                  >
+                    View all
+                  </button>
+                )}
+              </div>
+
+              <ul className="mt-4 space-y-4">
+                {matchedDetails.slice(0, 4).map((m) => (
+                  <li key={`${m.teacher_id}-${m.teach_skill_id}`} className="flex items-center gap-3">
+                    <UserAvatar userId={m.teacher_id} explicitName={m.teacher?.full_name} explicitAvatar={m.teacherSettings?.avatar_url as string | null} size="h-10 w-10 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm text-skillswap-800 truncate">
+                        {m.teacherSettings?.current_title || m.teachSkill?.name || m.skill || 'Skill Swap'}
+                      </div>
+                      <div className="text-xs text-skillswap-500 truncate">
+                        {m.teacherSettings?.current_company || m.teacher?.full_name || ''}
+                        {m.teachSkill?.proficiency_level ? ` · ${m.teachSkill.proficiency_level}` : ''}
+                      </div>
                     </div>
+                    <time
+                      className="text-xs text-skillswap-400 flex-shrink-0"
+                      dateTime={m.created_at || undefined}
+                    >
+                      {m.created_at ? (() => { const diff = Date.now() - new Date(m.created_at).getTime(); const mins = Math.floor(diff / 60000); if (mins < 60) return `${mins}min`; const hrs = Math.floor(mins / 60); if (hrs < 24) return `${hrs}h`; return `${Math.floor(hrs / 24)}d`; })() : ''}
+                    </time>
                   </li>
                 ))}
               </ul>
-            )}
+
+              {matchedDetails.length === 0 && (
+                <p className="mt-3 text-sm text-skillswap-500">No recommendations yet.</p>
+              )}
+            </div>
           </div>
         </aside>
       </div>

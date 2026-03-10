@@ -9,13 +9,35 @@ import {
   supabaseConfigError,
   Skill,
   UserProfile,
+  UserSettings,
 } from '@/lib/supabase';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Users, ArrowLeft } from 'lucide-react';
+import { useUserIdentity } from '@/hooks/use-user-identity';
 
 type PublicProfile = Pick<UserProfile, 'id' | 'full_name' | 'bio'>;
+type PublicSettings = Pick<UserSettings, 'avatar_url' | 'display_name'>;
+
+/** Avatar+name for a skill owner with 3-tier fallback */
+function SkillOwnerAvatar({ userId, explicitName, explicitAvatar }: {
+  userId: string;
+  explicitName?: string | null;
+  explicitAvatar?: string | null;
+}) {
+  const { name, avatarUrl } = useUserIdentity(userId, explicitName, explicitAvatar);
+  return (
+    <div className="flex items-center gap-2 mt-1">
+      <Avatar className="h-6 w-6">
+        <AvatarImage src={avatarUrl ?? ''} alt={name || 'User'} />
+        <AvatarFallback className="text-xs">{(name || 'U').slice(0, 1)}</AvatarFallback>
+      </Avatar>
+      <p className="text-sm text-skillswap-600">by {name || 'User'}</p>
+    </div>
+  );
+}
 
 function ExploreInner() {
   const router = useRouter();
@@ -27,6 +49,7 @@ function ExploreInner() {
   const [profilesById, setProfilesById] = useState<Record<string, PublicProfile>>(
     {}
   );
+  const [settingsById, setSettingsById] = useState<Record<string, PublicSettings>>({});
   const [ratingsByUser, setRatingsByUser] = useState<Record<string, { avg: number; count: number }>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -82,6 +105,17 @@ function ExploreInner() {
           map[p.id] = p as PublicProfile;
         });
         setProfilesById(map);
+
+        // Fetch avatar/display_name from user_settings for these owners
+        const { data: settingsData } = await supabase
+          .from('user_settings')
+          .select('id, avatar_url, display_name')
+          .in('id', userIds);
+        const smap: Record<string, PublicSettings> = {};
+        (settingsData || []).forEach((s: any) => {
+          smap[s.id] = { avatar_url: s.avatar_url, display_name: s.display_name };
+        });
+        setSettingsById(smap);
 
         // Load rating aggregates for these users
         try {
@@ -241,6 +275,7 @@ function ExploreInner() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {skills.map((skill) => {
               const owner = profilesById[skill.user_id];
+              const ownerSettings = settingsById[skill.user_id];
               const rating = ratingsByUser[skill.user_id];
               return (
                 <Card
@@ -252,9 +287,11 @@ function ExploreInner() {
                       <h3 className="text-lg font-bold text-skillswap-dark">
                         {skill.name}
                       </h3>
-                      <p className="text-sm text-skillswap-600 mt-1">
-                        by {owner?.full_name || 'SkillSwap member'}
-                      </p>
+                      <SkillOwnerAvatar
+                        userId={skill.user_id}
+                        explicitName={ownerSettings?.display_name || owner?.full_name}
+                        explicitAvatar={ownerSettings?.avatar_url}
+                      />
                       {rating ? (
                         <p className="text-xs text-skillswap-500 mt-1">★ {rating.avg.toFixed(1)} ({rating.count})</p>
                       ) : null}

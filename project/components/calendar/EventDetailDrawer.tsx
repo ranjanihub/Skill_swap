@@ -71,7 +71,20 @@ export default function EventDetailDrawer({
 
       <div>
         <h4 className="font-medium">Details</h4>
-        <p className="text-sm text-skillswap-600 mt-1">Status: {session.status}</p>
+        <p className="text-sm text-skillswap-600 mt-1">
+          Status:{' '}
+          {session.status === 'pending_approval' ? (
+            <span className="inline-flex items-center gap-1 text-amber-600 font-medium">
+              🟡 Waiting for approval
+            </span>
+          ) : session.status === 'rejected' ? (
+            <span className="inline-flex items-center gap-1 text-red-600 font-medium">
+              ❌ Declined
+            </span>
+          ) : (
+            session.status
+          )}
+        </p>
         <p className="text-sm text-skillswap-600 mt-1">Duration: {session.duration_minutes ?? 60} minutes</p>
         <p className="text-sm text-skillswap-600 mt-1">Mode: {session.meet_link ? 'Google Meet' : 'Chat'}</p>
         {session.meet_link ? (
@@ -86,6 +99,7 @@ export default function EventDetailDrawer({
         ) : null}
       </div>
 
+      {session.status !== 'pending_approval' && session.status !== 'rejected' && (
       <div className="flex gap-2 flex-wrap">
         <Button className="bg-skillswap-500 text-white" onClick={() => onJoin?.(session)}>
           Join Session
@@ -102,6 +116,21 @@ export default function EventDetailDrawer({
           Cancel
         </Button>
       </div>
+      )}
+
+      {session.status === 'pending_approval' && (
+        <div className="rounded-lg bg-amber-50 border border-amber-200 p-3">
+          <p className="text-sm text-amber-800 font-medium">⏳ Pending Approval</p>
+          <p className="text-xs text-amber-700 mt-1">This session is waiting for your partner to accept or decline.</p>
+        </div>
+      )}
+
+      {session.status === 'rejected' && (
+        <div className="rounded-lg bg-red-50 border border-red-200 p-3">
+          <p className="text-sm text-red-800 font-medium">Session Declined</p>
+          <p className="text-xs text-red-700 mt-1">Your partner declined this session request. The time slot has been released.</p>
+        </div>
+      )}
 
       <div>
         <h5 className="font-medium">Notes</h5>

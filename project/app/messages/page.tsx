@@ -53,11 +53,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { useUserIdentity } from '@/hooks/use-user-identity';
 
 type ConvWithMeta = Conversation & {
   other?: Pick<UserProfile, 'id' | 'full_name'>;
   lastMessage?: Message | null;
   avatar_url?: string | null;
+  display_name?: string | null;
   isAcceptedConnection?: boolean;
 };
 
@@ -69,7 +71,9 @@ type ChatPayload =
   | { _v: 1; type: 'file'; url: string; name: string; mime?: string | null; size?: number | null }
   | { _v: 1; type: 'voice'; url: string; mime?: string | null; durationSec?: number | null }
   | { _v: 1; type: 'notes'; title?: string | null; text: string }
-  | { _v: 1; type: 'system'; text: string };
+  | { _v: 1; type: 'system'; text: string }
+  | { _v: 1; type: 'session_request'; session_id: string; initiator_id: string; initiator_name: string; partner_id: string; scheduled_at: string; duration_minutes: number; my_skill_name: string; partner_skill_name: string; date_display: string; status: string; text: string }
+  | { _v: 1; type: 'session_response'; session_id: string; action: 'accepted' | 'declined'; responder_id: string; responder_name: string; scheduled_at: string; date_display: string; meet_link?: string | null; calendar_event_id?: string | null; duration_minutes?: number; text: string };
 
 function tryParsePayload(raw: string): ChatPayload {
   const s = String(raw ?? '');
@@ -107,13 +111,39 @@ function buildGoogleCalendarEventUrl(eventId: string) {
   return `https://calendar.google.com/calendar/u/0/r/eventedit/${encodeURIComponent(eventId)}`;
 }
 
+/** Avatar component that uses useUserIdentity for 3-tier fallback */
+function ConvAvatar({ userId, explicitName, explicitAvatar, size = 'h-12 w-12' }: {
+  userId: string;
+  explicitName?: string | null;
+  explicitAvatar?: string | null;
+  size?: string;
+}) {
+  const { name, avatarUrl } = useUserIdentity(userId, explicitName, explicitAvatar);
+  return (
+    <Avatar className={size}>
+      <AvatarImage src={avatarUrl ?? ''} alt={name || 'User'} />
+      <AvatarFallback>{(name || 'U').slice(0, 1)}</AvatarFallback>
+    </Avatar>
+  );
+}
+
+/** Name component that uses useUserIdentity for 3-tier fallback */
+function ConvName({ userId, explicitName, className }: {
+  userId: string;
+  explicitName?: string | null;
+  className?: string;
+}) {
+  const { name } = useUserIdentity(userId, explicitName);
+  return <p className={className}>{name || 'User'}</p>;
+}
+
 export default function MessagesPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
 
   const [conversations, setConversations] = useState<ConvWithMeta[]>([]);
-  const [settingsById, setSettingsById] = useState<Record<string, { avatar_url?: string | null }>>({});
+  const [settingsById, setSettingsById] = useState<Record<string, { avatar_url?: string | null; display_name?: string | null }>>({});
   const [activeConv, setActiveConv] = useState<ConvWithMeta | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState('');
@@ -144,6 +174,12 @@ export default function MessagesPage() {
   const [sessionDuration, setSessionDuration] = useState<number>(60);
   const [slotInput, setSlotInput] = useState('');
   const [proposedSlots, setProposedSlots] = useState<string[]>([]);
+  const [sessionDateTime, setSessionDateTime] = useState('');
+  const [sendingRequest, setSendingRequest] = useState(false);
+  const [myTeachSkills, setMyTeachSkills] = useState<Skill[]>([]);
+  const [partnerTeachSkills, setPartnerTeachSkills] = useState<Skill[]>([]);
+  const [selectedMySkillId, setSelectedMySkillId] = useState('');
+  const [selectedPartnerSkillId, setSelectedPartnerSkillId] = useState('');
 
   const [uploading, setUploading] = useState(false);
 
@@ -151,6 +187,9 @@ export default function MessagesPage() {
   const recorderRef = useRef<MediaRecorder | null>(null);
   const recordChunksRef = useRef<Blob[]>([]);
   const recordStartRef = useRef<number | null>(null);
+
+  // Track which session requests have been responded to (locally, to hide buttons)
+  const [respondedSessions, setRespondedSessions] = useState<Record<string, 'accepted' | 'declined'>>({});
 
   useEffect(() => {
     // load starred conversations from localStorage
@@ -202,13 +241,13 @@ export default function MessagesPage() {
         const byId: Record<string, Pick<UserProfile, 'id' | 'full_name'>> = {};
         (profiles || []).forEach((p: any) => (byId[p.id] = p));
 
-        // fetch avatars from user_settings
+        // fetch avatars and display names from user_settings
         const { data: settingsData } = await supabase
           .from('user_settings')
-          .select('id, avatar_url')
+          .select('id, avatar_url, display_name')
           .in('id', otherIds.slice(0, 200));
-        const settingsMap: Record<string, { avatar_url?: string | null }> = {};
-        (settingsData || []).forEach((s: any) => (settingsMap[s.id] = { avatar_url: s.avatar_url }));
+        const settingsMap: Record<string, { avatar_url?: string | null; display_name?: string | null }> = {};
+        (settingsData || []).forEach((s: any) => (settingsMap[s.id] = { avatar_url: s.avatar_url, display_name: s.display_name }));
         setSettingsById(settingsMap);
 
         // fetch connection_requests for these participants to determine accepted status
@@ -245,6 +284,7 @@ export default function MessagesPage() {
           other: byId[r.participant_a === user.id ? r.participant_b : r.participant_a],
           lastMessage: lastByConv[r.id] ?? null,
           avatar_url: settingsMap[r.participant_a === user.id ? r.participant_b : r.participant_a]?.avatar_url ?? null,
+          display_name: settingsMap[r.participant_a === user.id ? r.participant_b : r.participant_a]?.display_name ?? null,
           isAcceptedConnection:
             acceptedSet.has(`${user.id}:${r.participant_a === user.id ? r.participant_b : r.participant_a}`) ?? false,
         }));
@@ -313,6 +353,7 @@ export default function MessagesPage() {
       setActiveSession(null);
       setCalendarEventId(null);
       setGoogleConnected(false);
+      setPartnerTeachSkills([]);
       return;
     }
     if (!isSupabaseConfigured) return;
@@ -322,7 +363,7 @@ export default function MessagesPage() {
 
     const run = async () => {
       try {
-        const [{ data: skillRow }, { data: sessionRows }, { data: gConn }] = await Promise.all([
+        const [{ data: skillRow }, { data: sessionRows }, { data: gConn }, { data: pSkills }] = await Promise.all([
           supabase
             .from('skills')
             .select('*')
@@ -338,11 +379,18 @@ export default function MessagesPage() {
             .order('created_at', { ascending: false })
             .limit(10),
           supabase.from('google_calendar_connections').select('user_id').eq('user_id', user.id).maybeSingle(),
+          supabase
+            .from('skills')
+            .select('*')
+            .eq('user_id', otherId)
+            .eq('skill_type', 'teach')
+            .limit(100),
         ]);
 
         if (cancelled) return;
         setOtherTeachSkill((skillRow || null) as any);
         setGoogleConnected(Boolean(gConn));
+        setPartnerTeachSkills((pSkills || []) as Skill[]);
 
         const sessions = (sessionRows || []) as SkillSwapSession[];
         const next = sessions.find((s) => s.status === 'ongoing') || sessions.find((s) => s.status === 'scheduled') || null;
@@ -368,6 +416,20 @@ export default function MessagesPage() {
   useEffect(() => {
     if (!user) return;
 
+    // Load teach skills for session request form
+    const loadSkills = async () => {
+      try {
+        const { data: mySkills } = await supabase
+          .from('skills')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('skill_type', 'teach')
+          .limit(100);
+        setMyTeachSkills((mySkills || []) as Skill[]);
+      } catch {}
+    };
+    loadSkills();
+
     const convChannel = supabase
       .channel('public:conversations')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'conversations' }, (payload) => {
@@ -377,7 +439,7 @@ export default function MessagesPage() {
         void (async () => {
           try {
             const { data: profile } = await supabase.from('user_profiles').select('id, full_name').eq('id', otherId).maybeSingle();
-            const { data: settings } = await supabase.from('user_settings').select('id, avatar_url').eq('id', otherId).maybeSingle();
+            const { data: settings } = await supabase.from('user_settings').select('id, avatar_url, display_name').eq('id', otherId).maybeSingle();
             // determine if this pair has an accepted connection
             const { data: reqs } = await supabase
               .from('connection_requests')
@@ -388,7 +450,7 @@ export default function MessagesPage() {
             (reqs || []).forEach((r: any) => {
               if (r.status === 'accepted') isAccepted = true;
             });
-            setConversations((prev) => [{ ...row, other: profile ?? { id: otherId, full_name: 'Member' }, lastMessage: null, avatar_url: settings?.avatar_url ?? null, isAcceptedConnection: isAccepted }, ...prev]);
+            setConversations((prev) => [{ ...row, other: profile ?? { id: otherId, full_name: 'User' }, lastMessage: null, avatar_url: settings?.avatar_url ?? null, display_name: settings?.display_name ?? null, isAcceptedConnection: isAccepted }, ...prev]);
           } catch (e) {
             console.error('Realtime conv fetch failed', e);
           }
@@ -521,6 +583,122 @@ export default function MessagesPage() {
     window.open(link, '_blank', 'noopener,noreferrer');
   };
 
+  const [creatingMeet, setCreatingMeet] = useState(false);
+
+  const requestMeetLink = async () => {
+    if (!activeSession?.id) return;
+    setCreatingMeet(true);
+    try {
+      const { data: authSession } = await supabase.auth.getSession();
+      const token = authSession.session?.access_token;
+      if (!token) throw new Error('Not authenticated');
+
+      const res = await fetch('/api/sessions/create-meet', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ sessionId: activeSession.id }),
+      });
+
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json?.error || 'Failed to create meet link');
+      }
+
+      if (json.meetLink) {
+        setActiveSession((prev) => prev ? { ...prev, meet_link: json.meetLink, calendar_event_id: json.eventId || prev.calendar_event_id } : prev);
+        openMeetInNewTab(json.meetLink);
+        toast({ title: 'Google Meet created!', description: 'Opening in a new tab.' });
+      } else {
+        toast({ title: 'Meet link not available', description: 'Calendar event was created but no Meet link was generated.', variant: 'destructive' });
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to create meet link';
+      toast({ title: 'Error', description: msg, variant: 'destructive' });
+    } finally {
+      setCreatingMeet(false);
+    }
+  };
+
+  const respondToSessionRequest = async (sessionId: string, action: 'accept' | 'decline') => {
+    try {
+      const { data: authSession } = await supabase.auth.getSession();
+      const token = authSession.session?.access_token;
+      if (!token) throw new Error('Not authenticated');
+
+      const res = await fetch('/api/sessions/respond', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ sessionId, action }),
+      });
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || `Failed to ${action} session`);
+
+      setRespondedSessions((prev) => ({ ...prev, [sessionId]: action === 'accept' ? 'accepted' : 'declined' }));
+
+      if (action === 'accept' && json.meetLink) {
+        setActiveSession((prev) => prev ? { ...prev, meet_link: json.meetLink, status: 'scheduled' } : prev);
+      }
+
+      toast({ title: action === 'accept' ? 'Session accepted!' : 'Session declined', variant: 'default' });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : `Failed to ${action}`;
+      toast({ title: 'Error', description: msg, variant: 'destructive' });
+    }
+  };
+
+  const sendSessionRequest = async () => {
+    if (!user || !otherUserId || !sessionDateTime || !selectedMySkillId || !selectedPartnerSkillId) {
+      toast({ title: 'Please fill in all required fields (skills and date/time)', variant: 'destructive' });
+      return;
+    }
+
+    setSendingRequest(true);
+    try {
+      const { data: authSession } = await supabase.auth.getSession();
+      const token = authSession.session?.access_token;
+      if (!token) throw new Error('Not authenticated');
+
+      const res = await fetch('/api/sessions/request', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          partnerId: otherUserId,
+          mySkillId: selectedMySkillId,
+          partnerSkillId: selectedPartnerSkillId,
+          scheduledAt: new Date(sessionDateTime).toISOString(),
+          durationMinutes: sessionDuration || 60,
+          notes: sessionNote.trim() || null,
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || 'Failed to send session request');
+
+      toast({ title: 'Session request sent! Waiting for partner approval.', variant: 'default' });
+      setShowSessionRequest(false);
+      setSessionNote('');
+      setSessionDateTime('');
+      setSelectedMySkillId('');
+      setSelectedPartnerSkillId('');
+      setSessionDuration(60);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to send request';
+      toast({ title: 'Error', description: msg, variant: 'destructive' });
+    } finally {
+      setSendingRequest(false);
+    }
+  };
+
   const buildGoogleMeetLink = (base: string | null) => {
     if (!base) return '';
     return base.startsWith('http') ? base : `https://${base}`;
@@ -532,30 +710,94 @@ export default function MessagesPage() {
       payload = tryParsePayload(m.body || '');
     } catch {}
 
-    switch (payload.type) {
+    // Use a const copy so TypeScript narrows discriminated union in switch
+    const p = payload;
+
+    switch (p.type) {
       case 'text':
-        return <span>{payload.text}</span>;
+        return <span>{p.text}</span>;
       case 'image':
-        return <img src={payload.url} alt={payload.name || ''} className="max-w-full rounded" />;
+        return <img src={p.url} alt={p.name || ''} className="max-w-full rounded" />;
       case 'file':
         return (
-          <a href={payload.url} target="_blank" rel="noopener noreferrer" className="text-skillswap-500 underline">
-            {payload.name}
+          <a href={p.url} target="_blank" rel="noopener noreferrer" className="text-skillswap-500 underline">
+            {p.name}
           </a>
         );
       case 'voice':
         return (
-          <audio controls src={payload.url} className="max-w-full" />
+          <audio controls src={p.url} className="max-w-full" />
         );
       case 'notes':
         return (
           <div>
-            {payload.title && <p className="font-semibold">{payload.title}</p>}
-            <p>{payload.text}</p>
+            {p.title && <p className="font-semibold">{p.title}</p>}
+            <p>{p.text}</p>
           </div>
         );
       case 'system':
-        return <em className="text-skillswap-500">{payload.text}</em>;
+        return <em className="text-skillswap-500">{p.text}</em>;
+      case 'session_request': {
+        const responded = respondedSessions[p.session_id];
+        const isRecipient = user?.id === p.partner_id;
+        return (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 mb-1">
+              <Calendar className="h-4 w-4 text-amber-500" />
+              <span className="font-semibold text-sm">Session Request</span>
+            </div>
+            <p className="text-sm">{p.text}</p>
+            <div className="text-xs opacity-80 space-y-0.5">
+              <p>Skills: {p.my_skill_name} / {p.partner_skill_name}</p>
+              <p>Duration: {p.duration_minutes} min</p>
+            </div>
+            {responded ? (
+              <div className={`text-xs font-medium px-2 py-1 rounded inline-block ${responded === 'accepted' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                {responded === 'accepted' ? '✅ Accepted' : '❌ Declined'}
+              </div>
+            ) : isRecipient ? (
+              <div className="flex items-center gap-2 mt-1">
+                <button
+                  onClick={(e) => { e.stopPropagation(); respondToSessionRequest(p.session_id, 'accept'); }}
+                  className="px-3 py-1 text-xs rounded-full bg-green-600 text-white hover:bg-green-700 font-medium"
+                >
+                  Accept
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); respondToSessionRequest(p.session_id, 'decline'); }}
+                  className="px-3 py-1 text-xs rounded-full bg-red-500 text-white hover:bg-red-600 font-medium"
+                >
+                  Decline
+                </button>
+              </div>
+            ) : (
+              <div className="text-xs font-medium px-2 py-1 rounded inline-block bg-amber-100 text-amber-800">
+                ⏳ Waiting for approval
+              </div>
+            )}
+          </div>
+        );
+      }
+      case 'session_response': {
+        const isAccepted = p.action === 'accepted';
+        return (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 mb-1">
+              <Calendar className="h-4 w-4" />
+              <span className="font-semibold text-sm">{isAccepted ? 'Session Confirmed' : 'Session Declined'}</span>
+            </div>
+            <p className="text-sm">{p.text}</p>
+            {isAccepted && p.meet_link && (
+              <button
+                onClick={(e) => { e.stopPropagation(); window.open(p.meet_link!, '_blank', 'noopener,noreferrer'); }}
+                className="mt-1 px-3 py-1 text-xs rounded-full bg-blue-600 text-white hover:bg-blue-700 font-medium inline-flex items-center gap-1"
+              >
+                <Video className="h-3 w-3" /> Join Google Meet
+              </button>
+            )}
+          </div>
+        );
+      }
       default:
         return <span>{m.body}</span>;
     }
@@ -586,8 +828,8 @@ export default function MessagesPage() {
       ]}
       headerLeft={
         <div className="w-full flex items-center gap-3 min-w-0">
-          <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
-            <Image src="/SkillSwap_Logo.jpg" alt="SkillSwap" width={40} height={40} className="object-cover" />
+          <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 bg-white p-1 flex items-center justify-center">
+            <Image src="/SkillSwap_Logo.jpg" alt="SkillSwap" width={32} height={32} className="object-contain" />
           </div>
           <div className="flex-1 min-w-0 flex justify-center">
             <div className="w-full max-w-2xl relative">
@@ -702,16 +944,19 @@ export default function MessagesPage() {
                   <Search className="absolute left-3 top-2.5 h-4 w-4 text-skillswap-600" />
                 </div>
 
-                <div className="mt-3 flex items-center gap-2 flex-wrap">
-                  {DESKTOP_TABS.map((t) => (
+                <div className="mt-3 flex items-center">
+                  {DESKTOP_TABS.map((t, i) => (
                     <button
                       key={t}
                       type="button"
                       onClick={() => setActiveTab(t)}
                       className={cn(
-                        'h-8 px-3 rounded-full text-sm border',
+                        'h-8 px-4 text-sm border',
+                        i === 0 && 'rounded-l-full',
+                        i === DESKTOP_TABS.length - 1 && 'rounded-r-full',
+                        i !== 0 && '-ml-px',
                         activeTab === t
-                          ? 'bg-emerald-700 text-white border-emerald-700'
+                          ? 'bg-emerald-700 text-white border-emerald-700 z-10'
                           : 'bg-white text-skillswap-700 border-skillswap-200'
                       )}
                     >
@@ -743,15 +988,19 @@ export default function MessagesPage() {
                         )}
                         onClick={() => selectConversation(c)}
                       >
-                        <Avatar className="h-12 w-12">
-                          <AvatarImage src={''} alt={c.other?.full_name ?? 'Member'} />
-                          <AvatarFallback>{(c.other?.full_name || 'M').slice(0, 1)}</AvatarFallback>
-                        </Avatar>
+                        <ConvAvatar
+                          userId={c.participant_a === user!.id ? c.participant_b : c.participant_a}
+                          explicitName={c.display_name || c.other?.full_name}
+                          explicitAvatar={c.avatar_url}
+                          size="h-12 w-12"
+                        />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between gap-2">
-                            <p className="font-medium text-sm text-skillswap-800 truncate">
-                              {c.other?.full_name ?? 'Member'}
-                            </p>
+                            <ConvName
+                              userId={c.participant_a === user!.id ? c.participant_b : c.participant_a}
+                              explicitName={c.display_name || c.other?.full_name}
+                              className="font-medium text-sm text-skillswap-800 truncate"
+                            />
                             <p className="text-xs text-skillswap-500 flex-shrink-0">
                               {last ? new Date(last.created_at).toLocaleDateString() : ''}
                             </p>
@@ -806,14 +1055,20 @@ export default function MessagesPage() {
                       </button>
                     </div>
 
-                    <Avatar className="h-10 w-10">
-                      <AvatarImage src={activeConv.avatar_url ?? ''} alt={activeConv.other?.full_name ?? 'Member'} />
-                      <AvatarFallback>{(activeConv.other?.full_name || 'M').slice(0, 1)}</AvatarFallback>
-                    </Avatar>
+                    <ConvAvatar
+                      userId={activeConv.participant_a === user!.id ? activeConv.participant_b : activeConv.participant_a}
+                      explicitName={activeConv.display_name || activeConv.other?.full_name}
+                      explicitAvatar={activeConv.avatar_url}
+                      size="h-10 w-10"
+                    />
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 min-w-0">
-                        <p className="font-semibold text-sm text-skillswap-800 truncate">{activeConv.other?.full_name ?? 'Member'}</p>
+                        <ConvName
+                          userId={activeConv.participant_a === user!.id ? activeConv.participant_b : activeConv.participant_a}
+                          explicitName={activeConv.display_name || activeConv.other?.full_name}
+                          className="font-semibold text-sm text-skillswap-800 truncate"
+                        />
                         <span className={cn('h-2 w-2 rounded-full flex-shrink-0', otherOnline ? 'bg-emerald-500' : 'bg-skillswap-300')} aria-hidden="true" />
                         <p className="text-xs text-skillswap-600 flex-shrink-0">{otherOnline ? 'Online' : 'Offline'}</p>
                       </div>
@@ -891,21 +1146,7 @@ export default function MessagesPage() {
                           Share notes
                         </Button>
 
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            if (!activeSession?.meet_link) {
-                              // maybe open request meet modal; for now just alert
-                              alert('No meet link yet');
-                            } else {
-                              openMeetInNewTab(activeSession.meet_link);
-                            }
-                          }}
-                        >
-                          <Video className="h-4 w-4 mr-2" />
-                          {activeSession?.meet_link ? 'Join Meet' : 'Request Meet'}
-                        </Button>
+
                       </div>
                       {googleConnected && (
                         <Button size="sm" variant="outline" onClick={addToGoogleCalendar} disabled={!calendarEventId}>
@@ -914,40 +1155,85 @@ export default function MessagesPage() {
                       )}
                     </div>
                     {showSessionRequest && (
-                      <div className="mt-3">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <Input
-                            value={sessionNote}
-                            onChange={(e) => setSessionNote(e.target.value)}
-                            placeholder="Note (optional)"
-                            className="flex-1"
-                          />
-                          <Input
-                            value={sessionDuration.toString()}
-                            onChange={(e) => setSessionDuration(Number(e.target.value) || 0)}
-                            placeholder="Duration min"
-                            type="number"
-                            className="w-24"
-                          />
-                          <Input
-                            value={slotInput}
-                            onChange={(e) => setSlotInput(e.target.value)}
-                            placeholder="Propose slots (comma separated)"
-                            className="flex-1"
-                          />
+                      <div className="mt-3 space-y-2 bg-white rounded-lg p-3 border border-skillswap-200">
+                        <p className="text-sm font-medium text-skillswap-800">Request a Session</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-xs text-skillswap-600">You will teach</label>
+                            <select
+                              value={selectedMySkillId}
+                              onChange={(e) => setSelectedMySkillId(e.target.value)}
+                              className="w-full h-9 rounded-md border border-skillswap-200 bg-white px-2 text-sm"
+                            >
+                              <option value="">Select your skill</option>
+                              {myTeachSkills.map((s) => (
+                                <option key={s.id} value={s.id}>{s.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-xs text-skillswap-600">Partner will teach</label>
+                            <select
+                              value={selectedPartnerSkillId}
+                              onChange={(e) => setSelectedPartnerSkillId(e.target.value)}
+                              className="w-full h-9 rounded-md border border-skillswap-200 bg-white px-2 text-sm"
+                            >
+                              <option value="">Select partner skill</option>
+                              {partnerTeachSkills.map((s) => (
+                                <option key={s.id} value={s.id}>{s.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                          <div>
+                            <label className="text-xs text-skillswap-600">Date & Time</label>
+                            <Input
+                              type="datetime-local"
+                              value={sessionDateTime}
+                              onChange={(e) => setSessionDateTime(e.target.value)}
+                              className="h-9"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs text-skillswap-600">Duration (min)</label>
+                            <Input
+                              type="number"
+                              min={15}
+                              max={240}
+                              step={15}
+                              value={sessionDuration.toString()}
+                              onChange={(e) => setSessionDuration(Number(e.target.value) || 60)}
+                              className="h-9"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs text-skillswap-600">Note (optional)</label>
+                            <Input
+                              value={sessionNote}
+                              onChange={(e) => setSessionNote(e.target.value)}
+                              placeholder="Add a note"
+                              className="h-9"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex gap-2 justify-end">
                           <Button
                             size="sm"
-                            onClick={() => {
-                              const slots = slotInput.split(',').map((s) => s.trim()).filter(Boolean);
-                              setProposedSlots(slots);
-                            }}
+                            variant="outline"
+                            onClick={() => setShowSessionRequest(false)}
                           >
-                            Set Slots
+                            Cancel
+                          </Button>
+                          <Button
+                            size="sm"
+                            className="bg-skillswap-500 text-white"
+                            onClick={sendSessionRequest}
+                            disabled={sendingRequest || !selectedMySkillId || !selectedPartnerSkillId || !sessionDateTime}
+                          >
+                            {sendingRequest ? 'Sending…' : 'Send Request'}
                           </Button>
                         </div>
-                        {proposedSlots.length > 0 && (
-                          <p className="mt-2 text-xs text-skillswap-600">Proposed: {proposedSlots.join(', ')}</p>
-                        )}
                       </div>
                     )}
                   </div>

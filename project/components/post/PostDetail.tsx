@@ -5,9 +5,10 @@ import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { supabase } from '@/lib/supabase';
 import { formatExactDateTime, formatExactDateTimeWithSeconds } from '@/lib/utils';
+import { useUserIdentity } from '@/hooks/use-user-identity';
 
 export default function PostDetail({ skillId, fallbackSkill, fallbackOwner }: { skillId: string | null; fallbackSkill?: any; fallbackOwner?: any }) {
   const router = useRouter();
@@ -119,7 +120,13 @@ export default function PostDetail({ skillId, fallbackSkill, fallbackOwner }: { 
   if (error) return <div className="feed-card text-destructive">{error}</div>;
   if (!skill) return <div className="feed-card">No post</div>;
   // Render as a feed article matching the center feed layout
-  const displayName = owner?.full_name || fallbackOwner?.full_name || skill?.user_id || 'SkillSwap member';
+  const displayName = ownerSettings?.display_name || owner?.full_name || fallbackOwner?.full_name || 'User';
+  const ownerId = owner?.id || fallbackSkill?.user_id || skill?.user_id || '';
+  const { name: resolvedName, avatarUrl: resolvedAvatar } = useUserIdentity(
+    ownerId,
+    displayName !== 'User' ? displayName : null,
+    ownerSettings?.avatar_url as string | null,
+  );
   const displayBio = owner?.bio || fallbackOwner?.bio || skill?.description || skill?.user_id || 'SkillSwap member';
   const ts = skill.created_at || skill.created_at;
 
@@ -141,14 +148,15 @@ export default function PostDetail({ skillId, fallbackSkill, fallbackOwner }: { 
       <div className="flex items-start gap-3">
         <div className="w-12 h-12 rounded-full overflow-hidden">
           <Avatar className="h-12 w-12">
-            <AvatarFallback>{(displayName || 'M').slice(0, 1)}</AvatarFallback>
+            <AvatarImage src={resolvedAvatar ?? ''} alt={resolvedName || 'User'} />
+            <AvatarFallback>{(resolvedName || 'U').slice(0, 1)}</AvatarFallback>
           </Avatar>
         </div>
 
         <div className="flex-1">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="font-semibold text-skillswap-800">{displayName}</h3>
+              <h3 className="font-semibold text-skillswap-800">{resolvedName || 'User'}</h3>
               {ownerRating ? (
                 <div className="text-xs text-skillswap-500 mt-0.5">★ {ownerRating.avg.toFixed(1)} ({ownerRating.count})</div>
               ) : null}
