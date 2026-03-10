@@ -30,7 +30,6 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import {
   Dialog,
   DialogContent,
@@ -960,11 +959,13 @@ export default function CalendarStandalonePage() {
             </div>
 
             <div>
-              <Label>Notes (optional)</Label>
-              <Textarea
+              <Label>Meeting Link <span className="text-red-500">*</span></Label>
+              <Input
+                type="url"
+                required
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Add details"
+                placeholder="Paste Google Meet, Zoom, or other meeting link"
               />
             </div>
           </div>
@@ -976,7 +977,7 @@ export default function CalendarStandalonePage() {
             <Button
               className="bg-skillswap-500 text-white"
               onClick={submitSchedule}
-              disabled={savingSchedule || connections.length === 0}
+              disabled={savingSchedule || connections.length === 0 || !notes.trim()}
             >
               {savingSchedule ? 'Sending…' : rescheduleSessionId ? 'Save' : 'Send Request'}
             </Button>

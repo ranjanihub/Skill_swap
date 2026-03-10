@@ -388,7 +388,7 @@ function NetworkInner() {
             <h2 className="text-lg font-semibold text-skillswap-800">Manage my network</h2>
           </div>
           <div className="p-2">
-            {[{ label: 'Connections', count: connectionsCount }, { label: 'Following & followers', count: 0 }, { label: 'Groups', count: 0 }, { label: 'Events', count: 0 }, { label: 'Pages', count: 0 }, { label: 'Newsletters', count: 0 }].map((row) => (
+            {[{ label: 'Connections', count: connectionsCount }, { label: 'Following & followers', count: 0 }, { label: 'Groups', count: 0 }].map((row) => (
               <button
                 key={row.label}
                 type="button"
@@ -457,7 +457,7 @@ function NetworkInner() {
               </div>
 
               <div className="p-2">
-                {[{ label: 'Connections', count: connectionsCount }, { label: 'Following & followers', count: 0 }, { label: 'Groups', count: 0 }, { label: 'Events', count: 0 }, { label: 'Pages', count: 0 }, { label: 'Newsletters', count: 0 }].map((row) => (
+                {[{ label: 'Connections', count: connectionsCount }, { label: 'Following & followers', count: 0 }, { label: 'Groups', count: 0 }].map((row) => (
                   <button
                     key={row.label}
                     type="button"

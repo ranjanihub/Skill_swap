@@ -1004,7 +1004,6 @@ export default function Home() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-skillswap-400 pointer-events-none" />
             </div>
           </div>
 
