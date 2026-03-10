@@ -375,8 +375,6 @@ export default function CalendarStandalonePage() {
     setNotes('');
   };
 
-  const updateSessionStatus = async (sessionId: string, status: SkillSwapSession['status']) => {
-
   const respondToSession = async (sessionId: string, action: 'accept' | 'decline') => {
     if (!isSupabaseConfigured) return;
     try {
@@ -404,7 +402,10 @@ export default function CalendarStandalonePage() {
       console.error('Failed to respond to session', e);
       alert(`Failed: ${formatScheduleError(e)}`);
     }
-  };    if (!isSupabaseConfigured) {
+  };
+
+  const updateSessionStatus = async (sessionId: string, status: SkillSwapSession['status']) => {
+    if (!isSupabaseConfigured) {
       alert(supabaseConfigError ?? 'Supabase is not configured');
       return;
     }

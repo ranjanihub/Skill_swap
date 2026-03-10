@@ -29,9 +29,32 @@ export async function POST(req: Request) {
     const buffer = Buffer.from(arrayBuffer);
     const path = `${userId}/${Date.now()}_${file.name}`;
 
+    // Ensure the bucket exists and has no restrictive MIME type filter.
+    // We call updateBucket unconditionally so that even pre-existing buckets
+    // created with a narrow allowedMimeTypes list get corrected on the fly.
+    const { error: bucketCheckError } = await supabaseAdmin.storage.getBucket(bucket);
+    if (bucketCheckError) {
+      // Bucket does not exist — create it
+      const { error: createBucketError } = await supabaseAdmin.storage.createBucket(bucket, {
+        public: true,
+        fileSizeLimit: 10 * 1024 * 1024, // 10 MB
+        allowedMimeTypes: null, // no restrictions
+      });
+      if (createBucketError && !createBucketError.message?.includes('already exists')) {
+        return NextResponse.json({ error: `Failed to create storage bucket: ${createBucketError.message}` }, { status: 500 });
+      }
+    } else {
+      // Bucket exists — remove any MIME type restrictions so all file types are accepted
+      await supabaseAdmin.storage.updateBucket(bucket, {
+        public: true,
+        fileSizeLimit: 10 * 1024 * 1024,
+        allowedMimeTypes: null,
+      });
+    }
+
     const { error: uploadError } = await supabaseAdmin.storage
       .from(bucket)
-      .upload(path, buffer, { upsert: true });
+      .upload(path, buffer, { upsert: true, contentType: file.type });
 
     if (uploadError) {
       return NextResponse.json({ error: uploadError.message || String(uploadError) }, { status: 500 });
