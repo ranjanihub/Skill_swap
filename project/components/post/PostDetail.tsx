@@ -115,18 +115,19 @@ export default function PostDetail({ skillId, fallbackSkill, fallbackOwner }: { 
     };
   }, [skill?.user_id]);
 
+  // Compute identity values from state/props (may be null/empty before data loads — that's fine)
+  const ownerId = owner?.id || fallbackSkill?.user_id || skill?.user_id || '';
+  const displayName = ownerSettings?.display_name || owner?.full_name || fallbackOwner?.full_name || 'User';
+  const { name: resolvedName, avatarUrl: resolvedAvatar } = useUserIdentity(
+    ownerId || null,
+    displayName !== 'User' ? displayName : null,
+    ownerSettings?.avatar_url as string | null,
+  );
+
   if (!skillId) return null;
   if (loading) return <div className="feed-card">Loading post...</div>;
   if (error) return <div className="feed-card text-destructive">{error}</div>;
   if (!skill) return <div className="feed-card">No post</div>;
-  // Render as a feed article matching the center feed layout
-  const displayName = ownerSettings?.display_name || owner?.full_name || fallbackOwner?.full_name || 'User';
-  const ownerId = owner?.id || fallbackSkill?.user_id || skill?.user_id || '';
-  const { name: resolvedName, avatarUrl: resolvedAvatar } = useUserIdentity(
-    ownerId,
-    displayName !== 'User' ? displayName : null,
-    ownerSettings?.avatar_url as string | null,
-  );
   const displayBio = owner?.bio || fallbackOwner?.bio || skill?.description || skill?.user_id || 'SkillSwap member';
   const ts = skill.created_at || skill.created_at;
 

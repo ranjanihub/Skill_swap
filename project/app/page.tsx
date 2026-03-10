@@ -13,6 +13,13 @@ import AppShell, { type ShellNavItem } from '@/components/app-shell';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   isSupabaseConfigured,
   supabase,
   supabaseConfigError,
@@ -1532,7 +1539,16 @@ export default function Home() {
 
                 <ul className="mt-4 space-y-4">
                   {displayedMatches.slice(0, 4).map((m) => (
-                    <li key={`${m.teacher_id}-${m.teach_skill_id}`} className="flex items-center gap-3">
+                    <li
+                      key={`${m.teacher_id}-${m.teach_skill_id}`}
+                      className="flex items-center gap-3 cursor-pointer hover:bg-skillswap-50 rounded-lg px-1 py-0.5 transition-colors"
+                      onClick={() => {
+                        setSelectedPostId(m.teach_skill_id);
+                        setSelectedPostFallback(m);
+                        const feedEl = document.querySelector('section.space-y-6');
+                        if (feedEl) feedEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }}
+                    >
                       <UserAvatar userId={m.teacher_id} explicitName={m.teacher?.full_name} explicitAvatar={m.teacherSettings?.avatar_url as string | null} size="h-10 w-10 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
                         <div className="font-medium text-sm text-skillswap-800 truncate">
@@ -1557,35 +1573,22 @@ export default function Home() {
                   <div className="mt-3 space-y-3">
                     <div>
                       <p className="text-sm font-semibold text-skillswap-800 mb-2">What skills do you want to learn?</p>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={prefInput}
-                          onChange={(e) => setPrefInput(e.target.value)}
-                          placeholder="e.g. React, Design…"
-                          className="flex-1 text-sm border border-skillswap-200 rounded-md px-2 py-1 outline-none focus:ring-1 focus:ring-skillswap-400 bg-white"
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              const val = prefInput.trim();
-                              if (val && !prefSkills.includes(val)) setPrefSkills((prev) => [...prev, val]);
-                              setPrefInput('');
-                            }
-                          }}
-                        />
-                        <button
-                          type="button"
-                          className="text-xs border border-skillswap-300 rounded-md px-2 py-1 hover:bg-skillswap-50 disabled:opacity-40 transition-colors"
-                          onClick={() => {
-                            const val = prefInput.trim();
-                            if (val && !prefSkills.includes(val)) setPrefSkills((prev) => [...prev, val]);
-                            setPrefInput('');
-                          }}
-                          disabled={!prefInput.trim()}
-                        >
-                          Add
-                        </button>
-                      </div>
+                      <Select
+                        value={prefInput}
+                        onValueChange={(val) => {
+                          if (val && !prefSkills.includes(val)) setPrefSkills((prev) => [...prev, val]);
+                          setPrefInput('');
+                        }}
+                      >
+                        <SelectTrigger className="w-full text-sm">
+                          <SelectValue placeholder="Select a skill" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {['SQL','Python','Java','Next.JS','UIUX','React','Node','MongoDB','Git','N8N'].map((s) => (
+                            <SelectItem key={s} value={s} disabled={prefSkills.includes(s)}>{s}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       {prefSkills.length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-1">
                           {prefSkills.map((s) => (

@@ -16,6 +16,8 @@ type Props = {
   onCancel?: (s: SkillSwapSession) => void;
   onMarkCompleted?: (s: SkillSwapSession) => void;
   onSubmitRating?: (rating: number) => void;
+  onAccept?: (s: SkillSwapSession) => void;
+  onDecline?: (s: SkillSwapSession) => void;
 };
 
 export default function EventDetailDrawer({
@@ -28,6 +30,8 @@ export default function EventDetailDrawer({
   onCancel,
   onMarkCompleted,
   onSubmitRating,
+  onAccept,
+  onDecline,
 }: Props) {
   if (!session) {
     return (
@@ -119,10 +123,25 @@ export default function EventDetailDrawer({
       )}
 
       {session.status === 'pending_approval' && (
-        <div className="rounded-lg bg-amber-50 border border-amber-200 p-3">
-          <p className="text-sm text-amber-800 font-medium">⏳ Pending Approval</p>
-          <p className="text-xs text-amber-700 mt-1">This session is waiting for your partner to accept or decline.</p>
-        </div>
+        currentUserId === session.user_b_id ? (
+          <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 space-y-3">
+            <p className="text-sm text-amber-800 font-medium">📩 Session Request</p>
+            <p className="text-xs text-amber-700">Your partner has requested a skill swap session. Do you want to accept?</p>
+            <div className="flex gap-2">
+              <Button className="bg-skillswap-500 text-white flex-1" onClick={() => onAccept?.(session)}>
+                Accept
+              </Button>
+              <Button variant="destructive" className="flex-1" onClick={() => onDecline?.(session)}>
+                Decline
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-lg bg-amber-50 border border-amber-200 p-3">
+            <p className="text-sm text-amber-800 font-medium">⏳ Pending Approval</p>
+            <p className="text-xs text-amber-700 mt-1">Waiting for your partner to accept or decline.</p>
+          </div>
+        )
       )}
 
       {session.status === 'rejected' && (

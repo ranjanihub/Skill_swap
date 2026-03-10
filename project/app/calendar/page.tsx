@@ -376,7 +376,35 @@ export default function CalendarStandalonePage() {
   };
 
   const updateSessionStatus = async (sessionId: string, status: SkillSwapSession['status']) => {
-    if (!isSupabaseConfigured) {
+
+  const respondToSession = async (sessionId: string, action: 'accept' | 'decline') => {
+    if (!isSupabaseConfigured) return;
+    try {
+      const { data: authSession } = await supabase.auth.getSession();
+      const token = authSession.session?.access_token;
+      if (!token) { alert('Not authenticated'); return; }
+
+      const res = await fetch('/api/sessions/respond', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ sessionId, action }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || 'Failed to respond');
+
+      const updated = json.session as SkillSwapSession;
+      setSessions((prev) =>
+        prev
+          .map((s) => (s.id === sessionId ? { ...s, ...updated } : s))
+          .filter((s) => s.status === 'scheduled' || s.status === 'pending_approval')
+      );
+      setSelectedSession((prev) => (prev && prev.id === sessionId ? { ...prev, ...updated } : prev));
+      if (action === 'accept') setDetailsOpen(false);
+    } catch (e) {
+      console.error('Failed to respond to session', e);
+      alert(`Failed: ${formatScheduleError(e)}`);
+    }
+  };    if (!isSupabaseConfigured) {
       alert(supabaseConfigError ?? 'Supabase is not configured');
       return;
     }
@@ -1012,6 +1040,8 @@ export default function CalendarStandalonePage() {
             }}
             onCancel={(s) => updateSessionStatus(s.id, 'cancelled')}
             onMarkCompleted={(s) => updateSessionStatus(s.id, 'completed')}
+            onAccept={(s) => respondToSession(s.id, 'accept')}
+            onDecline={(s) => respondToSession(s.id, 'decline')}
             onReschedule={(s) => {
               setDetailsOpen(false);
               setSelectedSession(s);
