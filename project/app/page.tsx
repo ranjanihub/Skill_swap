@@ -112,6 +112,13 @@ export default function Home() {
   const [matchedDetails, setMatchedDetails] = useState<Array<any>>([]);
   const [ratingsByUser, setRatingsByUser] = useState<Record<string, { avg: number; count: number }>>({});
   const [sidebarCounts, setSidebarCounts] = useState<{ swaps: number; posted: number; connections: number; swapRequests: number }>({ swaps: 0, posted: 0, connections: 0, swapRequests: 0 });
+
+  // Learning preferences & preference-based matches
+  const [prefSkills, setPrefSkills] = useState<string[]>([]);
+  const [prefInput, setPrefInput] = useState('');
+  const [prefSaving, setPrefSaving] = useState(false);
+  const [prefMatches, setPrefMatches] = useState<any[]>([]);
+  const [prefLoading, setPrefLoading] = useState(false);
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [selectedPostFallback, setSelectedPostFallback] = useState<any | null>(null);
@@ -146,6 +153,83 @@ export default function Home() {
       window.prompt('Copy this link:', url);
     } catch (e) {
       console.warn('Share failed', e);
+    }
+  };
+
+  const fetchPrefMatches = async (skills: string[]) => {
+    if (!skills.length || !isSupabaseConfigured || !user) return;
+    setPrefLoading(true);
+    try {
+      const { data: teachSkills } = await supabase
+        .from('skills')
+        .select('id, name, user_id, proficiency_level, created_at')
+        .eq('skill_type', 'teach')
+        .in('name', skills);
+
+      const filtered = (teachSkills || []).filter((s: any) => s.user_id !== user.id);
+      if (!filtered.length) { setPrefMatches([]); return; }
+
+      const userIds = Array.from(new Set(filtered.map((s: any) => s.user_id as string)));
+      const [{ data: profilesData }, { data: settingsData }] = await Promise.all([
+        supabase.from('user_profiles').select('id, full_name, bio').in('id', userIds),
+        supabase.from('user_settings').select('id, headline, current_title, current_company, avatar_url, display_name').in('id', userIds),
+      ]);
+
+      const profilesMap: Record<string, any> = {};
+      (profilesData || []).forEach((p: any) => (profilesMap[p.id] = p));
+      const settingsMap: Record<string, any> = {};
+      (settingsData || []).forEach((s: any) => (settingsMap[s.id] = s));
+
+      const matches = filtered.map((skill: any) => ({
+        teacher_id: skill.user_id,
+        teach_skill_id: skill.id,
+        skill: skill.name,
+        teacher: profilesMap[skill.user_id] || null,
+        teacherSettings: settingsMap[skill.user_id] || null,
+        teachSkill: skill,
+        created_at: skill.created_at,
+      }));
+
+      setPrefMatches(matches);
+    } catch (e) {
+      console.error('Failed to fetch preference matches', e);
+    } finally {
+      setPrefLoading(false);
+    }
+  };
+
+  const loadPrefSkills = async () => {
+    if (!user || !isSupabaseConfigured) return;
+    try {
+      const { data } = await supabase
+        .from('user_learning_preferences')
+        .select('skill_name')
+        .eq('user_id', user.id);
+      if (data && data.length > 0) {
+        const names = data.map((r: any) => r.skill_name as string);
+        setPrefSkills(names);
+        void fetchPrefMatches(names);
+      }
+    } catch (e) {
+      console.warn('Failed to load learning preferences', e);
+    }
+  };
+
+  const savePrefSkills = async () => {
+    if (!user || !isSupabaseConfigured) return;
+    setPrefSaving(true);
+    try {
+      await supabase.from('user_learning_preferences').delete().eq('user_id', user.id);
+      if (prefSkills.length > 0) {
+        await supabase
+          .from('user_learning_preferences')
+          .insert(prefSkills.map((name) => ({ user_id: user.id, skill_name: name })));
+      }
+      void fetchPrefMatches(prefSkills);
+    } catch (e) {
+      console.error('Failed to save preferences', e);
+    } finally {
+      setPrefSaving(false);
     }
   };
 
@@ -282,6 +366,11 @@ export default function Home() {
 
     return out;
   }, [notifications]);
+
+  // Prefer global matches; fall back to preference-based matches
+  const displayedMatches = useMemo(() => {
+    return matchedDetails.length > 0 ? matchedDetails : prefMatches;
+  }, [matchedDetails, prefMatches]);
 
   useEffect(() => {
     const loadDetails = async () => {
@@ -473,6 +562,7 @@ export default function Home() {
         }
 
         setFeed(owners);
+        void loadPrefSkills();
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Failed to load home feed';
         setError(msg);
@@ -1428,9 +1518,9 @@ export default function Home() {
               <div className="mt-5 border-t border-skillswap-200 pt-4">
                 <div className="flex items-center justify-between">
                   <p className="text-sm text-skillswap-600">
-                    {matchedDetails.length} Swap profile recommended for you
+                    {displayedMatches.length} Swap profile{displayedMatches.length !== 1 ? 's' : ''} recommended for you
                   </p>
-                  {matchedDetails.length > 0 && (
+                  {displayedMatches.length > 0 && (
                     <button
                       onClick={() => setShowMatchedSwapsCenter(true)}
                       className="text-xs font-medium text-skillswap-600 border border-skillswap-300 rounded-full px-3 py-1 hover:bg-skillswap-50 transition-colors"
@@ -1441,7 +1531,7 @@ export default function Home() {
                 </div>
 
                 <ul className="mt-4 space-y-4">
-                  {matchedDetails.slice(0, 4).map((m) => (
+                  {displayedMatches.slice(0, 4).map((m) => (
                     <li key={`${m.teacher_id}-${m.teach_skill_id}`} className="flex items-center gap-3">
                       <UserAvatar userId={m.teacher_id} explicitName={m.teacher?.full_name} explicitAvatar={m.teacherSettings?.avatar_url as string | null} size="h-10 w-10 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
@@ -1450,7 +1540,6 @@ export default function Home() {
                         </div>
                         <div className="text-xs text-skillswap-500 truncate">
                           {m.teacherSettings?.current_company || m.teacher?.full_name || ''}
-                          {m.teachSkill?.proficiency_level ? ` · ${m.teachSkill.proficiency_level}` : ''}
                         </div>
                       </div>
                       <time
@@ -1463,8 +1552,71 @@ export default function Home() {
                   ))}
                 </ul>
 
-                {matchedDetails.length === 0 && (
-                  <p className="mt-3 text-sm text-skillswap-500">No recommendations yet.</p>
+                {/* Empty state: ask for preferred skills when no recommendations exist */}
+                {matchedDetails.length === 0 && prefMatches.length === 0 && (
+                  <div className="mt-3 space-y-3">
+                    <div>
+                      <p className="text-sm font-semibold text-skillswap-800 mb-2">What skills do you want to learn?</p>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={prefInput}
+                          onChange={(e) => setPrefInput(e.target.value)}
+                          placeholder="e.g. React, Design…"
+                          className="flex-1 text-sm border border-skillswap-200 rounded-md px-2 py-1 outline-none focus:ring-1 focus:ring-skillswap-400 bg-white"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              const val = prefInput.trim();
+                              if (val && !prefSkills.includes(val)) setPrefSkills((prev) => [...prev, val]);
+                              setPrefInput('');
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className="text-xs border border-skillswap-300 rounded-md px-2 py-1 hover:bg-skillswap-50 disabled:opacity-40 transition-colors"
+                          onClick={() => {
+                            const val = prefInput.trim();
+                            if (val && !prefSkills.includes(val)) setPrefSkills((prev) => [...prev, val]);
+                            setPrefInput('');
+                          }}
+                          disabled={!prefInput.trim()}
+                        >
+                          Add
+                        </button>
+                      </div>
+                      {prefSkills.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {prefSkills.map((s) => (
+                            <span key={s} className="inline-flex items-center gap-1 bg-skillswap-100 text-skillswap-700 text-xs px-2 py-0.5 rounded-full">
+                              {s}
+                              <button
+                                type="button"
+                                onClick={() => setPrefSkills((prev) => prev.filter((x) => x !== s))}
+                                className="hover:text-destructive leading-none"
+                              >
+                                ×
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={savePrefSkills}
+                        disabled={prefSaving || !prefSkills.length}
+                        className="mt-2 w-full text-sm bg-skillswap-500 text-white rounded-md py-1.5 hover:bg-skillswap-600 disabled:opacity-40 transition-colors"
+                      >
+                        {prefSaving ? 'Saving…' : 'Save & find matches'}
+                      </button>
+                    </div>
+                    {prefLoading ? (
+                      <p className="text-sm text-skillswap-500 animate-pulse">Finding matches…</p>
+                    ) : (
+                      <p className="text-sm text-skillswap-500">No recommendations yet.</p>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
