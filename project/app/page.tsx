@@ -368,7 +368,7 @@ export default function Home() {
 
   const publicNav: ShellNavItem[] = [
     { href: '/', label: 'Home', icon: HomeIcon },
-    { href: '/explore', label: 'Explore Skills', icon: Compass },
+    { href: '/', label: 'Explore Skills', icon: Compass },
   ];
 
   // If user is not logged in, we don't redirect; show login button in header instead.
@@ -722,6 +722,12 @@ export default function Home() {
       return;
     }
 
+    const score = evaluateQuiz();
+    if (score < 75) {
+      setError(`You need at least 75% on the quiz to post this skill. Your score: ${Math.round(score)}%`);
+      return;
+    }
+
     setPosting(true);
     try {
       const { error: insertError } = await supabase.from('skills').insert({
@@ -978,8 +984,6 @@ export default function Home() {
 
   return (
     <>
-    <header className="h-16 bg-white border-b border-skillswap-200 flex items-center justify-between px-4 sm:px-6"><div className="flex items-center gap-2"><button className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 !bg-gradient-to-r !from-white !to-skillswap-200 !text-skillswap-dark hover:to-skillswap-100 h-10 w-10 text-skillswap-600 lg:hidden" type="button" aria-label="Menu"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-menu h-5 w-5"><line x1="4" x2="20" y1="12" y2="12"></line><line x1="4" x2="20" y1="6" y2="6"></line><line x1="4" x2="20" y1="18" y2="18"></line></svg></button><div className="min-w-0"><div className="w-full flex items-center gap-3 min-w-0"><div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 bg-white p-1 flex items-center justify-center"><img alt="SkillSwap" loading="lazy" width="32" height="32" decoding="async" data-nimg="1" className="object-contain" src="/SkillSwap_Logo.jpg" style={{ color: 'transparent' }} /></div><div className="flex-1 min-w-0 flex justify-center"><div className="w-full max-w-2xl relative"><input aria-label="Search swaps" placeholder="Search Swaps" className="mobile-header-search pl-10 w-full" value="" /></div></div><div className="flex items-center gap-2 flex-shrink-0"><button aria-label="Notifications" title="Notifications" className="h-10 w-10 rounded-full bg-white flex items-center justify-center shadow-sm"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-bell h-5 w-5 text-skillswap-600"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg></button></div></div></div></div><div className="flex items-center gap-1 sm:gap-2"></div></header>
-
       <AppShell
         showSidebar={false}
         mobileMenu={mobileMenu}
@@ -1321,6 +1325,42 @@ export default function Home() {
                             >
                               {g.ts ? formatExactDateTime(g.ts) : ''}
                             </time>
+                          </div>
+
+                          {/* Skill icons below date */}
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {g.skills.map((skill) => {
+                              const skillIconMap: Record<string, string> = {
+                                'sql': 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/mysql/mysql-original.svg',
+                                'python': 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/python/python-original.svg',
+                                'java': 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/java/java-original.svg',
+                                'next.js': 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/nextjs/nextjs-original.svg',
+                                'uiux': 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/figma/figma-original.svg',
+                                'react': 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/react/react-original.svg',
+                                'node': 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/nodejs/nodejs-original.svg',
+                                'mongodb': 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/mongodb/mongodb-original.svg',
+                                'git': 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/git/git-original.svg',
+                                'n8n': 'https://avatars.githubusercontent.com/u/45487711?s=48&v=4',
+                              };
+                              const iconUrl = skillIconMap[skill.name.toLowerCase().trim()];
+                              return iconUrl ? (
+                                <img
+                                  key={skill.id}
+                                  src={iconUrl}
+                                  alt={skill.name}
+                                  title={skill.name}
+                                  className="w-6 h-6 rounded object-contain"
+                                />
+                              ) : (
+                                <span
+                                  key={skill.id}
+                                  className="inline-flex items-center justify-center w-6 h-6 rounded bg-skillswap-100 text-skillswap-700 text-[10px] font-bold"
+                                  title={skill.name}
+                                >
+                                  {skill.name.slice(0, 2).toUpperCase()}
+                                </span>
+                              );
+                            })}
                           </div>
 
                           <div className="mt-3 text-sm text-skillswap-700">

@@ -27,7 +27,7 @@ import AppShell from '@/components/app-shell';
 
 const nav = [
   { href: '/', label: 'Home', icon: Home },
-  { href: '/explore', label: 'Explore Skills', icon: Compass },
+  { href: '/', label: 'Explore Skills', icon: Compass },
 ];
 
 const bottomNav = [

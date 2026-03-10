@@ -804,7 +804,7 @@ export default function MessagesPage() {
   };
   const publicNav: ShellNavItem[] = [
     { href: '/', label: 'Home', icon: HomeIcon },
-    { href: '/explore', label: 'Explore Skills', icon: Compass },
+    { href: '/', label: 'Explore Skills', icon: Compass },
   ];
 
   if (authLoading || loading) {

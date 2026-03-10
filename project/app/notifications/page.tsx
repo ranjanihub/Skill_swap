@@ -91,8 +91,8 @@ function buildNotifView(n: Notification, opts: { routerPush: (href: string) => v
       icon: Compass,
       title: 'Skill match found',
       body: `${actorName || 'Someone'} ${verb} ${skillName || 'a skill'}.`,
-      href: '/explore',
-      primaryAction: { label: 'Explore', onClick: () => push('/explore') },
+      href: '/',
+      primaryAction: { label: 'Explore', onClick: () => push('/') },
     };
   }
 
@@ -256,7 +256,7 @@ function buildNotifView(n: Notification, opts: { routerPush: (href: string) => v
       details,
       href: '/dashboard/connections',
       primaryAction: { label: 'Rate partner', onClick: () => push('/dashboard/connections') },
-      secondaryAction: { label: 'Schedule another', onClick: () => push('/explore') },
+      secondaryAction: { label: 'Schedule another', onClick: () => push('/') },
     };
   }
 
@@ -291,7 +291,7 @@ export default function NotificationsPage() {
 
   const publicNav: ShellNavItem[] = [
     { href: '/', label: 'Home', icon: HomeIcon },
-    { href: '/explore', label: 'Explore Skills', icon: Compass },
+    { href: '/', label: 'Explore Skills', icon: Compass },
   ];
 
   useEffect(() => {

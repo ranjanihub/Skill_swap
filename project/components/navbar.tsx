@@ -48,7 +48,7 @@ export function Navbar() {
           <Link href="/#about" className="hover:underline underline-offset-4">
             About
           </Link>
-          <Link href="/explore" className="hover:underline underline-offset-4">
+          <Link href="/" className="hover:underline underline-offset-4">
             Explore Skills
           </Link>
           <Link href="/#how-it-works" className="hover:underline underline-offset-4">

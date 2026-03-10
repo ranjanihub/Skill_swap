@@ -179,7 +179,7 @@ export default function CalendarStandalonePage() {
 
   const publicNav: ShellNavItem[] = [
     { href: '/', label: 'Home', icon: HomeIcon },
-    { href: '/explore', label: 'Explore Skills', icon: Compass },
+    { href: '/', label: 'Explore Skills', icon: Compass },
   ];
 
   const today = useMemo(() => startOfDay(new Date()), []);

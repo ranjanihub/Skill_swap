@@ -51,135 +51,168 @@ export default function SkillAssessmentPage() {
 
   type QA = { question: string; options: string[]; correctIndex: number };
 
-  // legacy fallback if AI generation fails
+  // Curated 10-question sets per skill
   const getStaticQuestionsForSkill = (name: string): QA[] => {
-    const s = name.toLowerCase();
+    const s = name.toLowerCase().trim();
 
-    if (/\b(py|python)\b/.test(s)) {
-      return [
-        {
-          question: 'Which of the following is a valid way to create a list in Python?',
-          options: ['list = (1,2,3)', 'list = [1,2,3]', 'list = {1,2,3}', 'list = <1,2,3>'],
-          correctIndex: 1,
-        },
-        {
-          question: 'What does `len()` do in Python?',
-          options: ['Return the length of an object', 'Create a new list', 'Convert to integer', 'Delete an object'],
-          correctIndex: 0,
-        },
-        {
-          question: 'Which keyword defines a function in Python?',
-          options: ['func', 'def', 'function', 'fn'],
-          correctIndex: 1,
-        },
-        {
-          question: 'How do you write a comment in Python?',
-          options: ['// comment', '<!-- comment -->', '# comment', '/* comment */'],
-          correctIndex: 2,
-        },
-        {
-          question: 'Which data type is immutable in Python?',
-          options: ['list', 'dict', 'set', 'tuple'],
-          correctIndex: 3,
-        },
-      ];
-    }
+    if (s === 'sql') return [
+      { question: 'Which SQL clause filters rows based on a condition?', options: ['GROUP BY','ORDER BY','WHERE','HAVING'], correctIndex: 2 },
+      { question: 'Which statement removes a table and all its data permanently?', options: ['DELETE TABLE','DROP TABLE','TRUNCATE TABLE','REMOVE TABLE'], correctIndex: 1 },
+      { question: 'Which aggregate function counts the number of rows?', options: ['COUNT(*)','SUM()','TOTAL()','NUMBER()'], correctIndex: 0 },
+      { question: 'How do you retrieve unique values from a column?', options: ['SELECT UNIQUE col','SELECT DISTINCT col','SELECT ONLY col','SELECT SINGLE col'], correctIndex: 1 },
+      { question: 'Which clause groups rows with the same values?', options: ['GROUP BY','ORDER BY','HAVING','LIMIT'], correctIndex: 0 },
+      { question: 'Which JOIN returns all rows from both tables, with NULLs where there is no match?', options: ['INNER JOIN','LEFT JOIN','RIGHT JOIN','FULL OUTER JOIN'], correctIndex: 3 },
+      { question: 'What does the HAVING clause filter?', options: ['Individual rows before grouping','Groups after GROUP BY','Columns in SELECT','Ordered results'], correctIndex: 1 },
+      { question: 'Which keyword is used to sort results in descending order?', options: ['ASC','DESC','ORDER','SORT DESC'], correctIndex: 1 },
+      { question: 'What is a PRIMARY KEY?', options: ['A column that can have duplicate values','A unique identifier for each row','A foreign reference to another table','An indexed column only'], correctIndex: 1 },
+      { question: 'Which SQL statement is used to modify existing records?', options: ['INSERT','UPDATE','ALTER','MODIFY'], correctIndex: 1 },
+    ];
 
-    if (/\b(js|javascript)\b/.test(s)) {
-      return [
-        {
-          question: 'Which keyword declares a variable with block scope in modern JavaScript?',
-          options: ['var', 'let', 'const', 'dim'],
-          correctIndex: 1,
-        },
-        {
-          question: 'How do you create an arrow function?',
-          options: ['function() => {}', '() => {}', '=> function() {}', 'fn => {}'],
-          correctIndex: 1,
-        },
-        {
-          question: 'Which method converts a JSON string to an object?',
-          options: ['JSON.stringify', 'JSON.parse', 'JSON.toObject', 'parse.JSON'],
-          correctIndex: 1,
-        },
-        {
-          question: 'What is the result of `[] + []` in JavaScript?',
-          options: ['[]', '""', '0', 'NaN'],
-          correctIndex: 1,
-        },
-        {
-          question: 'Which of these is a primitive type in JS?',
-          options: ['Object', 'Array', 'Symbol', 'Date'],
-          correctIndex: 2,
-        },
-      ];
-    }
+    if (s === 'python') return [
+      { question: 'Which of the following creates a list in Python?', options: ['x = (1,2,3)','x = [1,2,3]','x = {1,2,3}','x = <1,2,3>'], correctIndex: 1 },
+      { question: 'What does `len()` return?', options: ['Length of an object','A new list','An integer conversion','Nothing'], correctIndex: 0 },
+      { question: 'Which keyword is used to define a function?', options: ['func','def','function','fn'], correctIndex: 1 },
+      { question: 'How do you write a single-line comment in Python?', options: ['// comment','<!-- comment -->','# comment','/* comment */'], correctIndex: 2 },
+      { question: 'Which data type is immutable in Python?', options: ['list','dict','set','tuple'], correctIndex: 3 },
+      { question: 'What is the output of `type(3.14)` in Python?', options: ['<class \'int\'>','<class \'float\'>','<class \'double\'>','<class \'number\'>'], correctIndex: 1 },
+      { question: 'Which method adds an element to the end of a list?', options: ['list.add()','list.insert()','list.append()','list.push()'], correctIndex: 2 },
+      { question: 'How do you open a file for reading in Python?', options: ['open("f", "w")','open("f", "r")','read("f")','file.open("f")'], correctIndex: 1 },
+      { question: 'What keyword is used for exception handling in Python?', options: ['catch','except','error','handle'], correctIndex: 1 },
+      { question: 'Which built-in function converts a string to an integer?', options: ['str()','float()','int()','num()'], correctIndex: 2 },
+    ];
 
-    if (/\b(sql)\b/.test(s)) {
-      return [
-        {
-          question: 'Which SQL clause is used to filter rows?',
-          options: ['GROUP BY', 'ORDER BY', 'WHERE', 'HAVING'],
-          correctIndex: 2,
-        },
-        {
-          question: 'Which statement removes a table and its data?',
-          options: ['DELETE TABLE', 'DROP TABLE', 'TRUNCATE TABLE', 'REMOVE TABLE'],
-          correctIndex: 1,
-        },
-        {
-          question: 'Which function counts rows in SQL?',
-          options: ['COUNT(*)', 'SUM()', 'TOTAL()', 'NUMBER()'],
-          correctIndex: 0,
-        },
-        {
-          question: 'How do you get unique values from a column?',
-          options: ['SELECT UNIQUE', 'SELECT DISTINCT', 'SELECT ONLY', 'SELECT SINGLE'],
-          correctIndex: 1,
-        },
-        {
-          question: 'Which clause groups rows that have the same values?',
-          options: ['GROUP BY', 'ORDER BY', 'HAVING', 'LIMIT'],
-          correctIndex: 0,
-        },
-      ];
-    }
+    if (s === 'java') return [
+      { question: 'Which keyword is used to create an object in Java?', options: ['create','new','make','object'], correctIndex: 1 },
+      { question: 'What is the entry point of a Java program?', options: ['start()','init()','main()','run()'], correctIndex: 2 },
+      { question: 'Which access modifier makes a member accessible only within its class?', options: ['public','protected','default','private'], correctIndex: 3 },
+      { question: 'Which data type stores a single character in Java?', options: ['String','char','letter','Char'], correctIndex: 1 },
+      { question: 'What does JVM stand for?', options: ['Java Virtual Machine','Java Variable Method','Java Verified Module','Java Value Mapper'], correctIndex: 0 },
+      { question: 'Which keyword prevents a class from being subclassed?', options: ['static','abstract','final','sealed'], correctIndex: 2 },
+      { question: 'How do you declare an integer array of size 5 in Java?', options: ['int arr = new int[5]','int[] arr = new int[5]','array<int> arr(5)','int arr[5]'], correctIndex: 1 },
+      { question: 'Which collection allows key-value pairs in Java?', options: ['ArrayList','HashSet','HashMap','LinkedList'], correctIndex: 2 },
+      { question: 'What is the default value of a boolean field in Java?', options: ['true','false','null','0'], correctIndex: 1 },
+      { question: 'Which interface must be implemented to sort objects using Collections.sort()?', options: ['Sortable','Comparable','Comparator','Orderable'], correctIndex: 1 },
+    ];
 
-    // Generic scenario-based multiple-choice questions for non-technical skills
+    if (s === 'next.js') return [
+      { question: 'Which folder is used for file-based routing in Next.js 13+?', options: ['src/','pages/','app/','routes/'], correctIndex: 2 },
+      { question: 'Which function fetches data at build time in the Pages Router?', options: ['getServerSideProps','getStaticProps','getInitialProps','fetchBuildData'], correctIndex: 1 },
+      { question: 'What directive marks a component as a Client Component in Next.js 13+?', options: ['"use client"','"client only"','<Client>','import \'client\''], correctIndex: 0 },
+      { question: 'Which file defines the root layout in the App Router?', options: ['_app.tsx','layout.tsx','root.tsx','index.tsx'], correctIndex: 1 },
+      { question: 'How do you create a dynamic route segment in Next.js?', options: ['[segment]','<segment>',':segment','{segment}'], correctIndex: 0 },
+      { question: 'Which Next.js component optimises images automatically?', options: ['<Img>','<OptimizedImage>','<Image>','<Picture>'], correctIndex: 2 },
+      { question: 'What does `getServerSideProps` do?', options: ['Fetches data at build time','Fetches data on every request','Generates static paths','Prefetches client data'], correctIndex: 1 },
+      { question: 'Which file is used to customise the 404 page in the Pages Router?', options: ['error.tsx','not-found.tsx','404.tsx','missing.tsx'], correctIndex: 2 },
+      { question: 'Which Next.js API handles server-side logic in the Pages Router?', options: ['pages/server/','pages/api/','pages/handlers/','pages/routes/'], correctIndex: 1 },
+      { question: 'How do you prefetch a link in Next.js?', options: ['<a prefetch>','<Link prefetch>','<Link> (automatic by default)','router.prefetch()'], correctIndex: 2 },
+    ];
+
+    if (s === 'uiux') return [
+      { question: 'What does UX stand for?', options: ['User Experience','User Extension','Unified Experience','UI Extension'], correctIndex: 0 },
+      { question: 'Which principle states that interface elements should look the same when they behave the same?', options: ['Proximity','Consistency','Affordance','Hierarchy'], correctIndex: 1 },
+      { question: 'What is a wireframe?', options: ['A high-fidelity prototype','A low-fidelity skeletal layout','A CSS framework','A colour palette tool'], correctIndex: 1 },
+      { question: 'Which tool is most commonly used for UI design and prototyping?', options: ['VS Code','Figma','Jira','Slack'], correctIndex: 1 },
+      { question: 'What does A/B testing measure?', options: ['Server load','Two design variants to find which performs better','Accessibility compliance','Code quality'], correctIndex: 1 },
+      { question: 'What is the purpose of a user persona?', options: ['Track bugs','Represent a fictional user based on research','Define component styles','Manage sprints'], correctIndex: 1 },
+      { question: 'Which colour contrast ratio is required for WCAG AA compliance for normal text?', options: ['2:1','3:1','4.5:1','7:1'], correctIndex: 2 },
+      { question: 'What is a heuristic evaluation?', options: ['User testing with real users','An expert review against usability principles','A/B testing','Heat map analysis'], correctIndex: 1 },
+      { question: 'What is the purpose of whitespace in UI design?', options: ['Wasted space','Improves readability and visual hierarchy','Reduces load time','Adds colour'], correctIndex: 1 },
+      { question: 'What does CTA stand for in UX?', options: ['Click Through Action','Call To Action','Content Type Attribute','Creative Text Area'], correctIndex: 1 },
+    ];
+
+    if (s === 'react') return [
+      { question: 'Which hook is used to manage local state in a React functional component?', options: ['useEffect','useContext','useState','useReducer'], correctIndex: 2 },
+      { question: 'What does JSX stand for?', options: ['JavaScript XML','JavaScript Extension','Java Syntax Extension','JSON XML'], correctIndex: 0 },
+      { question: 'Which hook runs a side effect after every render by default?', options: ['useState','useEffect','useMemo','useCallback'], correctIndex: 1 },
+      { question: 'How do you pass data from a parent to a child component?', options: ['State','Context','Props','Refs'], correctIndex: 2 },
+      { question: 'What is the Virtual DOM?', options: ['A real browser DOM copy','A lightweight in-memory representation of the DOM','A CSS rendering engine','A JavaScript engine'], correctIndex: 1 },
+      { question: 'Which method lifts state up to a common ancestor?', options: ['Passing callback props','Using localStorage','Using a global variable','Directly mutating child state'], correctIndex: 0 },
+      { question: 'What does the key prop do in a list?', options: ['Styles the element','Helps React identify which items changed','Acts as an index','Sets the order'], correctIndex: 1 },
+      { question: 'Which hook memorises a computed value to avoid recalculation?', options: ['useCallback','useRef','useMemo','useEffect'], correctIndex: 2 },
+      { question: 'What is a controlled component?', options: ['A component with no state','A component whose form input is driven by React state','A component wrapped in a HOC','A component using refs'], correctIndex: 1 },
+      { question: 'What does `React.StrictMode` do?', options: ['Enables TypeScript','Highlights potential problems in development','Disables hooks','Enables server rendering'], correctIndex: 1 },
+    ];
+
+    if (s === 'node') return [
+      { question: 'Node.js is built on which JavaScript engine?', options: ['SpiderMonkey','Chakra','V8','JavaScriptCore'], correctIndex: 2 },
+      { question: 'Which module system is native to Node.js (CommonJS)?', options: ['import/export','require/module.exports','load/expose','include/define'], correctIndex: 1 },
+      { question: 'Which core module does Node use for HTTP requests?', options: ['net','fs','http','url'], correctIndex: 2 },
+      { question: 'What does `npm init` do?', options: ['Installs all packages','Creates a package.json file','Starts the dev server','Runs tests'], correctIndex: 1 },
+      { question: 'Which of the following is used for non-blocking I/O in Node?', options: ['Threads','Callbacks/Promises/async-await','Global variables','Synchronous loops'], correctIndex: 1 },
+      { question: 'What is the event loop responsible for in Node.js?', options: ['Compiling TypeScript','Handling asynchronous callbacks','Managing memory','Parsing HTML'], correctIndex: 1 },
+      { question: 'Which package is commonly used to create a Node.js web server framework?', options: ['lodash','express','axios','dotenv'], correctIndex: 1 },
+      { question: 'How do you read environment variables in Node.js?', options: ['window.env.VAR','process.env.VAR','global.env.VAR','node.env.VAR'], correctIndex: 1 },
+      { question: 'Which command runs a Node.js script called app.js?', options: ['npm app.js','node run app.js','node app.js','run app.js'], correctIndex: 2 },
+      { question: 'What does `fs.readFileSync` do?', options: ['Reads a file asynchronously','Reads a file synchronously','Writes to a file','Deletes a file'], correctIndex: 1 },
+    ];
+
+    if (s === 'mongodb') return [
+      { question: 'MongoDB stores data in which format?', options: ['Tables and rows','XML documents','BSON/JSON-like documents','CSV files'], correctIndex: 2 },
+      { question: 'What is a collection in MongoDB?', options: ['A row','A table equivalent (group of documents)','A database','An index'], correctIndex: 1 },
+      { question: 'Which method inserts one document into a collection?', options: ['collection.insertOne()','collection.save()','collection.add()','collection.create()'], correctIndex: 0 },
+      { question: 'Which operator selects documents where a field is greater than a value?', options: ['$lt','$eq','$gt','$ne'], correctIndex: 2 },
+      { question: 'What is the unique identifier field automatically added to each MongoDB document?', options: ['id','_key','_id','uid'], correctIndex: 2 },
+      { question: 'Which aggregation stage filters documents (similar to SQL WHERE)?', options: ['$group','$match','$project','$sort'], correctIndex: 1 },
+      { question: 'What does Mongoose provide in a Node.js application?', options: ['A REST API framework','An ODM (Object Document Mapper) for MongoDB','A query builder for SQL','A caching layer'], correctIndex: 1 },
+      { question: 'How do you update a single document in MongoDB?', options: ['collection.update()','collection.updateOne()','collection.set()','collection.change()'], correctIndex: 1 },
+      { question: 'Which command connects to a MongoDB shell?', options: ['mongo connect','mongosh','mongodb-cli','db connect'], correctIndex: 1 },
+      { question: 'What is sharding in MongoDB?', options: ['Data encryption','Horizontal scaling by distributing data across servers','Backup strategy','Index optimisation'], correctIndex: 1 },
+    ];
+
+    if (s === 'git') return [
+      { question: 'Which command initialises a new Git repository?', options: ['git start','git init','git new','git create'], correctIndex: 1 },
+      { question: 'Which command stages all changes for the next commit?', options: ['git commit -a','git push','git add .','git stage all'], correctIndex: 2 },
+      { question: 'Which command creates a new branch?', options: ['git new branch','git branch <name>','git checkout -b <name>','Both B and C'], correctIndex: 3 },
+      { question: 'What does `git pull` do?', options: ['Pushes local commits to remote','Fetches and merges remote changes','Only fetches remote changes','Resets the working directory'], correctIndex: 1 },
+      { question: 'Which command shows the commit history?', options: ['git show','git history','git log','git status'], correctIndex: 2 },
+      { question: 'What does `git merge` do?', options: ['Deletes a branch','Integrates changes from one branch into another','Reverts the last commit','Clones the repository'], correctIndex: 1 },
+      { question: 'Which command undoes the last commit but keeps the changes staged?', options: ['git revert HEAD','git reset --hard HEAD~1','git reset --soft HEAD~1','git checkout HEAD~1'], correctIndex: 2 },
+      { question: 'What is a .gitignore file used for?', options: ['Ignoring syntax errors','Specifying untracked files to ignore','Hiding remote branches','Setting commit messages'], correctIndex: 1 },
+      { question: 'Which command links a local repository to a remote?', options: ['git link','git remote add origin <url>','git connect <url>','git push origin'], correctIndex: 1 },
+      { question: 'What does `git stash` do?', options: ['Commits changes','Temporarily shelves uncommitted changes','Deletes the working tree','Tags the current commit'], correctIndex: 1 },
+    ];
+
+    if (s === 'n8n') return [
+      { question: 'What type of tool is n8n?', options: ['A database management system','A workflow automation platform','A front-end framework','A cloud provider'], correctIndex: 1 },
+      { question: 'What is a "node" in n8n?', options: ['A server instance','A step/action in a workflow','A database record','A user account'], correctIndex: 1 },
+      { question: 'Which node type starts a workflow in n8n?', options: ['Action node','Trigger node','Webhook node','Schedule node'], correctIndex: 1 },
+      { question: 'How does n8n handle data between nodes?', options: ['Via a shared database','Via JSON items passed between nodes','Via environment variables','Via HTTP cookies'], correctIndex: 1 },
+      { question: 'What is an HTTP Request node used for?', options: ['Sending emails','Making API calls to external services','Querying a database','Processing files'], correctIndex: 1 },
+      { question: 'Which n8n node allows conditional branching?', options: ['Split node','If node','Filter node','Switch node'], correctIndex: 1 },
+      { question: 'What does the "Set" node do in n8n?', options: ['Deletes workflow data','Sets or manipulates data fields','Sends a notification','Starts a sub-workflow'], correctIndex: 1 },
+      { question: 'n8n can be self-hosted. What does this mean?', options: ['It runs on n8n servers only','You run it on your own infrastructure','It is free forever','It requires no setup'], correctIndex: 1 },
+      { question: 'Which format does n8n use for expressions?', options: ['Handlebars {{ }}','Jinja2 {% %}','n8n uses {{ }} with JavaScript expressions','Python f-strings'], correctIndex: 2 },
+      { question: 'What is a Webhook trigger node used for?', options: ['Scheduling recurring workflows','Receiving HTTP requests to start a workflow','Connecting to a database','Sending emails'], correctIndex: 1 },
+    ];
+
+    // Generic fallback
     return [
-      {
-        question: `You are asked to demonstrate ${name} to a newcomer. What is the best first step?`,
-        options: ['Give them an advanced exercise', 'Explain high-level concepts and motivations', 'Have them read a long spec', 'Ignore their questions'],
-        correctIndex: 1,
-      },
-      {
-        question: `When facing a common problem in ${name}, the best approach is:`,
-        options: ['Panic and ask for help', 'Try well-known solutions and debug systematically', 'Rebuild everything from scratch', 'Blame external tools'],
-        correctIndex: 1,
-      },
-      {
-        question: `How would you measure improvement in ${name}?`,
-        options: ['Track concrete outcomes or completed tasks', 'Rely on subjective feeling only', 'Change goals daily', 'Avoid measuring'],
-        correctIndex: 0,
-      },
-      {
-        question: `If asked to teach ${name} to a peer, you should:`,
-        options: ['Skip fundamentals and show advanced tricks', 'Start with fundamentals then practical examples', 'Only share slides', 'Only give long reading lists'],
-        correctIndex: 1,
-      },
-      {
-        question: `Which behaviour indicates a strong practical ability in ${name}?`,
-        options: ['Knowing many buzzwords', 'Applying concepts to solve real problems', 'Reading documentation once', 'Avoiding hands-on tasks'],
-        correctIndex: 1,
-      },
+      { question: `What is the primary purpose of ${name}?`, options: ['Data storage','Automation and workflows','User interface design','All of the above'], correctIndex: 3 },
+      { question: `Which best describes a beginner in ${name}?`, options: ['Can teach others','Understands core concepts but needs guidance','Has no knowledge at all','Is certified'], correctIndex: 1 },
+      { question: `How do you measure improvement in ${name}?`, options: ['Track concrete outcomes','Rely on feeling','Change goals daily','Avoid measuring'], correctIndex: 0 },
+      { question: `What is the best way to learn ${name}?`, options: ['Read theory only','Combine theory with hands-on practice','Watch videos passively','Memorise syntax'], correctIndex: 1 },
+      { question: `When stuck on a problem in ${name}, you should:`, options: ['Give up','Debug systematically and consult docs','Ask someone to do it for you','Restart everything'], correctIndex: 1 },
+      { question: `Which habit helps most when working with ${name}?`, options: ['Skipping documentation','Writing clean, readable code/work','Avoiding version control','Working in isolation'], correctIndex: 1 },
+      { question: `What does versioning mean in the context of ${name}?`, options: ['Deleting old files','Tracking changes over time','Renaming files','Compressing data'], correctIndex: 1 },
+      { question: `How would you explain ${name} to a non-technical person?`, options: ['Use heavy jargon','Use simple analogies and examples','Refuse to explain','Send a long manual'], correctIndex: 1 },
+      { question: `What is a best practice when collaborating on ${name} projects?`, options: ['Work alone always','Communicate clearly and document your work','Ignore reviews','Copy-paste without attribution'], correctIndex: 1 },
+      { question: `Which indicates mastery of ${name}?`, options: ['Knowing buzzwords','Solving real-world problems effectively','Having many certifications','Memorising tutorials'], correctIndex: 1 },
     ];
   };
 
   const [questionsState, setQuestionsState] = useState<QA[]>([]);
   const questions = useMemo(() => questionsState, [questionsState]);
 
+  const PREDEFINED_SKILLS = ['sql','python','java','next.js','uiux','react','node','mongodb','git','n8n'];
+
   useEffect(() => {
     if (!skill) return;
+    const skillKey = skill.name.toLowerCase().trim();
+    // Use curated questions directly for predefined skills
+    if (PREDEFINED_SKILLS.includes(skillKey)) {
+      setQuestionsState(getStaticQuestionsForSkill(skill.name));
+      return;
+    }
     const fetchQs = async () => {
       try {
         const res = await fetch(`/api/generate-questions?skill=${encodeURIComponent(skill.name)}`);

@@ -688,7 +688,7 @@ export default function ConnectionsPage() {
 
   const publicNav: ShellNavItem[] = [
     { href: '/', label: 'Home', icon: Users },
-    { href: '/explore', label: 'Explore Skills', icon: MessageSquare },
+    { href: '/', label: 'Explore Skills', icon: MessageSquare },
   ];
 
   return (
@@ -749,7 +749,7 @@ export default function ConnectionsPage() {
                 <h2 className="text-xl font-bold text-skillswap-dark mb-2">No skills posted yet.</h2>
                 <p className="text-skillswap-600 mb-6">Be the first to add a skill or explore others.</p>
                 <div className="flex justify-center gap-3">
-                  <Button onClick={() => router.push('/explore')} className="bg-skillswap-500 text-white">Explore Skills</Button>
+                  <Button onClick={() => router.push('/')} className="bg-skillswap-500 text-white">Explore Skills</Button>
                   <Button onClick={() => router.push('/dashboard/settings')} variant="outline">Add a Skill</Button>
                 </div>
               </Card>
@@ -807,7 +807,7 @@ export default function ConnectionsPage() {
                 <h2 className="text-xl font-bold text-skillswap-dark mb-2">You don’t have any connections yet.</h2>
                 <p className="text-skillswap-600 mb-6">Start exploring skills to connect with others.</p>
                 <div className="flex justify-center gap-3">
-                  <Button onClick={() => router.push('/explore')} className="bg-skillswap-500 text-white">Explore Skills</Button>
+                  <Button onClick={() => router.push('/')} className="bg-skillswap-500 text-white">Explore Skills</Button>
                   <Button onClick={() => router.push('/dashboard/settings')} variant="outline">Add a Skill</Button>
                 </div>
               </Card>

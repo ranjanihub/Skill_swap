@@ -1080,12 +1080,16 @@ export default function SettingsPage() {
         </p>
 
         <div className="mt-4 flex flex-col sm:flex-row items-start gap-3">
-          <Input
-            placeholder="Skill name (e.g. React, Spanish)"
-            value={testDraft}
-            onChange={(e) => setTestDraft(e.target.value)}
-            disabled={saving}
-          />
+          <Select value={testDraft} onValueChange={setTestDraft} disabled={saving}>
+            <SelectTrigger className="w-full sm:w-64">
+              <SelectValue placeholder="Select a skill" />
+            </SelectTrigger>
+            <SelectContent>
+              {['SQL','Python','Java','Next.JS','UIUX','React','Node','MongoDB','Git','N8N'].map((s) => (
+                <SelectItem key={s} value={s}>{s}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button
             onClick={async () => {
               if (!user) return;
