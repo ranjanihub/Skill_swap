@@ -1091,41 +1091,14 @@ export default function SettingsPage() {
             </SelectContent>
           </Select>
           <Button
-            onClick={async () => {
-              if (!user) return;
+            onClick={() => {
               const name = testDraft.trim();
               if (!name) {
                 setError('Skill name is required');
                 return;
               }
-              try {
-                setSaving(true);
-                setError('');
-                await ensureUserProfileRow();
-                const { data, error: insertError } = await supabase
-                  .from('skills')
-                  .insert({
-                    user_id: user.id,
-                    name,
-                    skill_type: 'teach',
-                    proficiency_level: 'beginner',
-                    category: null,
-                    description: null,
-                  })
-                  .select('id')
-                  .maybeSingle();
-                if (insertError) throw insertError;
-                const id: string | undefined = data?.id;
-                setTestDraft('');
-                if (id) {
-                  // navigate to assessment page
-                  window.location.href = `/dashboard/skill-assessment?skillId=${id}`;
-                }
-              } catch (e) {
-                setError(getSupabaseErrorMessage(e, 'Failed to start assessment'));
-              } finally {
-                setSaving(false);
-              }
+              setTestDraft('');
+              window.location.href = `/dashboard/skill-assessment?skillName=${encodeURIComponent(name)}`;
             }}
             disabled={saving || !testDraft.trim()}
             className="bg-skillswap-500 text-white"

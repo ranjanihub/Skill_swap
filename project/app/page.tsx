@@ -1223,7 +1223,6 @@ export default function Home() {
                           <ul className="mt-1 space-y-1">
                             <li className="flex items-center justify-between gap-3">
                               <span className="truncate">{skillName}</span>
-                              <span className="text-xs text-skillswap-500 flex-shrink-0">{prof}</span>
                             </li>
                           </ul>
                         </div>
@@ -1369,14 +1368,12 @@ export default function Home() {
                               {g.skills.map((skill) => (
                                 <li key={skill.id} className="flex items-center justify-between gap-3">
                                   <span className="truncate">{skill.skill_type === 'teach' ? 'Teaches' : 'Learns'}: {skill.name}</span>
-                                  <span className="text-xs text-skillswap-500 flex-shrink-0">{skill.proficiency_level}</span>
                                 </li>
                               ))}
                             </ul>
                           </div>
 
                           <div className="mt-4 flex flex-wrap gap-3">
-                            <button className="btn-outline-rounded" onClick={() => router.push(`/profile/${g.owner.id}`)}>View Profile</button>
                             <button
                               className="btn-outline-rounded"
                               onClick={() => {

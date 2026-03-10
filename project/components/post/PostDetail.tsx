@@ -177,14 +177,12 @@ export default function PostDetail({ skillId, fallbackSkill, fallbackOwner }: { 
               {skillsToShow.map((s: any) => (
                 <li key={s.id || s.name} className="flex items-center justify-between gap-3">
                   <span className="truncate">{(s.skill_type === 'teach' ? 'Teaches: ' : 'Learns: ') + (s.name || skill.name)}</span>
-                  <span className="text-xs text-skillswap-500 flex-shrink-0">{s.proficiency_level || ''}</span>
                 </li>
               ))}
             </ul>
           </div>
 
           <div className="mt-4 flex flex-wrap gap-3">
-            <button className="btn-outline-rounded" onClick={() => router.push(`/profile/${owner?.id || fallbackSkill?.user_id}`)}>View Profile</button>
             {skillsToShow.map((s: any) => (
               <button key={`req-${s.id || s.name}`} className="btn-primary-rounded" onClick={() => onRequest(s)}>{`Request: ${s.name || skill.name}`}</button>
             ))}

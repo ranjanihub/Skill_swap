@@ -12,11 +12,12 @@ type Phase = 'instructions' | 'quiz' | 'results';
 
 export default function SkillAssessmentPage() {
   const { user, loading: authLoading } = useAuth();
-  const [skill, setSkill] = useState<Skill | null>(null);
+  const [skillName, setSkillName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [answers, setAnswers] = useState<number[]>([]);
   const [saving, setSaving] = useState(false);
+  const [savedSkillId, setSavedSkillId] = useState<string | null>(null);
 
   // New state for phased quiz flow
   const [phase, setPhase] = useState<Phase>('instructions');
@@ -26,28 +27,18 @@ export default function SkillAssessmentPage() {
 
   useEffect(() => {
     if (authLoading) return;
-    // read skillId from query string
     const params = new URLSearchParams(window.location.search);
-    const skillId = params.get('skillId');
-    const run = async () => {
-      if (!skillId) {
-        setError('No skill specified (skillId query param required)');
-        setLoading(false);
-        return;
-      }
-      try {
-        setLoading(true);
-        const { data, error } = await supabase.from('skills').select('*').eq('id', skillId).maybeSingle();
-        if (error) throw error;
-        setSkill((data || null) as Skill | null);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
-      } finally {
-        setLoading(false);
-      }
-    };
-    void run();
+    const name = params.get('skillName');
+    if (!name) {
+      setError('No skill specified (skillName query param required)');
+    } else {
+      setSkillName(name);
+    }
+    setLoading(false);
   }, [authLoading]);
+
+  // Shim: keep a "skill" object so the rest of the component works unchanged
+  const skill = skillName ? ({ id: '', name: skillName, skill_type: 'teach', proficiency_level: 'beginner' } as unknown as Skill) : null;
 
   type QA = { question: string; options: string[]; correctIndex: number };
 
@@ -307,24 +298,39 @@ export default function SkillAssessmentPage() {
 
   const saveAssessmentToSkill = async () => {
     if (!skill || !user) return;
+    if (score < 75) {
+      setError('You need at least 75% to add this skill to your profile.');
+      return;
+    }
     try {
       setSaving(true);
       setError(null);
       const correct = questions.reduce((acc, q, i) => acc + (answers[i] === q.correctIndex ? 1 : 0), 0);
-      const summary = `Assessment: ${score}% (${correct}/${questions.length}) — ${level}. Answers: ${answers.join(', ')}`;
-      const { error } = await supabase
+      const summary = `Assessment: ${score}% (${correct}/${questions.length}) — ${level}.`;
+      // Insert the skill into the DB only now (after passing)
+      const { data, error: insertError } = await supabase
         .from('skills')
-        .update({ description: summary })
-        .eq('id', skill.id)
-        .eq('user_id', user.id);
-      if (error) throw error;
-      // reflect locally
-      setSkill((s) => (s ? { ...s, description: summary } : s));
+        .insert({
+          user_id: user.id,
+          name: skill.name,
+          skill_type: 'teach',
+          proficiency_level: level,
+          category: null,
+          description: summary,
+        })
+        .select('id')
+        .maybeSingle();
+      if (insertError) throw insertError;
+      setSavedSkillId(data?.id ?? null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setSaving(false);
     }
+  };
+
+  const deleteSkillAndRetry = async () => {
+    window.location.href = '/dashboard/settings';
   };
 
   if (authLoading || loading) return <div className="min-h-[40vh] flex items-center justify-center">Loading...</div>;
@@ -515,10 +521,27 @@ export default function SkillAssessmentPage() {
             <p className="text-sm">Score: <strong>{score}%</strong></p>
             <p className="text-sm">Suggested level: <strong className="capitalize">{level}</strong></p>
           </div>
-          <div className="flex items-center gap-2">
-            <Button onClick={saveAssessmentToSkill} disabled={saving} className="bg-skillswap-500 text-white">{saving ? 'Saving...' : 'Save to skill'}</Button>
-            <Button variant="outline" onClick={() => (window.location.href = '/dashboard/settings')}>Done</Button>
-          </div>
+          {score >= 75 ? (
+            <div className="flex items-center gap-2">
+              {savedSkillId ? (
+                <>
+                  <span className="text-green-600 font-medium text-sm">✓ Skill added to your profile!</span>
+                  <Button variant="outline" onClick={() => (window.location.href = '/dashboard/settings')}>Go to Settings</Button>
+                </>
+              ) : (
+                <Button onClick={saveAssessmentToSkill} disabled={saving} className="bg-skillswap-500 text-white">{saving ? 'Saving...' : 'Save to profile'}</Button>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col items-end gap-2">
+              <p className="text-sm text-red-600 font-medium">You need at least 75% to add this skill to your profile.</p>
+              <div className="flex items-center gap-2">
+                <Button onClick={deleteSkillAndRetry} disabled={saving} className="bg-red-500 text-white hover:bg-red-600">
+                  {saving ? 'Removing...' : 'Try Again'}
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </Card>
     </div>
