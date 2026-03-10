@@ -453,8 +453,9 @@ export default function SettingsPage() {
         if (!res.ok) {
           throw new Error(json?.error || 'Evidence upload failed');
         }
-        const publicUrl = json?.publicUrl as string | null;
-        if (publicUrl) evidenceUrls.push(publicUrl);
+        const publicUrl = json?.publicUrl;
+        if (!publicUrl) throw new Error('Failed to get public URL for avatar');
+        evidenceUrls.push(publicUrl);
       }
 
       // Best-effort accused_id resolution from recent post data
@@ -807,6 +808,27 @@ export default function SettingsPage() {
     () => skills.filter((s) => s.skill_type === 'learn'),
     [skills]
   );
+
+  const [eligibleSkills, setEligibleSkills] = useState<Skill[]>([]);
+
+  useEffect(() => {
+    const fetchEligibleSkills = async () => {
+      if (!user) return;
+      try {
+        const { data, error } = await supabase
+          .from('skills')
+          .select('*')
+          .eq('user_id', user.id)
+          .gte('score', 75);
+        if (error) throw error;
+        setEligibleSkills(data || []);
+      } catch (err) {
+        console.error('Failed to fetch eligible skills:', err);
+      }
+    };
+
+    fetchEligibleSkills();
+  }, [user]);
 
   if (authLoading || loading) {
     return (
@@ -1203,117 +1225,6 @@ export default function SettingsPage() {
       </div>
 
       <div>
-        <Card className="p-6 bg-white border-2 border-skillswap-200">
-          <h3 className="text-lg font-semibold text-skillswap-dark">Skill exchange pair</h3>
-          <p className="text-sm text-skillswap-600">Enter the skill you offer and the skill you want to learn.</p>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-            <div>
-              <Label className="text-skillswap-dark">I am offering (skill)</Label>
-              <Input
-                value={teachDraft.name}
-                onChange={(e) => setTeachDraft((d) => ({ ...d, name: e.target.value }))}
-                placeholder="e.g., React, Public speaking"
-                disabled={saving}
-              />
-              <Label className="text-sm mt-2 text-skillswap-dark">Proficiency</Label>
-              <Select
-                value={teachDraft.proficiency_level}
-                onValueChange={(v) => setTeachDraft((d) => ({ ...d, proficiency_level: v as Skill['proficiency_level'] }))}
-                disabled={saving}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select level" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="beginner">Beginner</SelectItem>
-                  <SelectItem value="intermediate">Intermediate</SelectItem>
-                  <SelectItem value="advanced">Advanced</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label className="text-skillswap-dark">I want to learn (skill)</Label>
-              <Input
-                value={learnDraft.name}
-                onChange={(e) => setLearnDraft((d) => ({ ...d, name: e.target.value }))}
-                placeholder="e.g., UI design, Python"
-                disabled={saving}
-              />
-              <Label className="text-sm mt-2 text-skillswap-dark">Current level</Label>
-              <Select
-                value={learnDraft.proficiency_level}
-                onValueChange={(v) => setLearnDraft((d) => ({ ...d, proficiency_level: v as Skill['proficiency_level'] }))}
-                disabled={saving}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select level" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="beginner">Beginner</SelectItem>
-                  <SelectItem value="intermediate">Intermediate</SelectItem>
-                  <SelectItem value="advanced">Advanced</SelectItem>
-                </SelectContent>
-              </Select>
-              <Label className="text-sm mt-2 text-skillswap-dark">Goal (optional)</Label>
-              <Input value={learnDraft.goal} onChange={(e) => setLearnDraft((d) => ({ ...d, goal: e.target.value }))} placeholder="e.g., Build a portfolio in 30 days" disabled={saving} />
-            </div>
-          </div>
-
-            <div className="mt-4">
-              <Label className="text-skillswap-dark">Additional notes (optional)</Label>
-              <Textarea value={pairNotes} onChange={(e) => setPairNotes(e.target.value)} placeholder="Anything you'd like to mention about this pair (optional)" disabled={saving} />
-            </div>
-
-          <div className="flex justify-end mt-4">
-            <Button
-              onClick={async () => {
-                if (!user) return;
-                const offerName = teachDraft.name.trim();
-                const wantName = learnDraft.name.trim();
-                if (!offerName && !wantName) {
-                  setError('Provide at least one skill to add');
-                  return;
-                }
-                try {
-                  setSaving(true);
-                  setError('');
-                  await ensureUserProfileRow();
-                  const inserts: Partial<Skill>[] = [];
-                  if (offerName) {
-                    // make sure user has done an assessment for this teaching skill
-                    if (!(await hasAssessmentFor(offerName))) {
-                      setError('Please take a test for the offering skill before adding it.');
-                      return;
-                    }
-                    inserts.push({ user_id: user.id, name: offerName, skill_type: 'teach', proficiency_level: teachDraft.proficiency_level, category: null, description: null });
-                  }
-                  if (wantName) {
-                    inserts.push({ user_id: user.id, name: wantName, skill_type: 'learn', proficiency_level: learnDraft.proficiency_level, category: null, description: learnDraft.goal.trim() || null });
-                  }
-                  if (inserts.length > 0) {
-                    const { error: insertError } = await supabase.from('skills').insert(inserts);
-                    if (insertError) throw insertError;
-                    await refreshSkills();
-                    setTeachDraft(defaultTeachDraft);
-                    setLearnDraft(defaultLearnDraft);
-                    setSuccess('Skill pair added');
-                  }
-                } catch (err) {
-                  setError(getSupabaseErrorMessage(err, 'Failed to add skills'));
-                } finally {
-                  setSaving(false);
-                }
-              }}
-              disabled={saving}
-              className="bg-skillswap-500 text-white hover:bg-skillswap-600"
-            >
-              Add pair
-            </Button>
-          </div>
-        </Card>
-
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
           <Card className="p-6 bg-white border-2 border-skillswap-200">
             <h4 className="font-semibold text-skillswap-dark mb-3">Teaching</h4>

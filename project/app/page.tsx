@@ -978,230 +978,231 @@ export default function Home() {
 
   return (
     <>
-    <AppShell
-      showSidebar={false}
-      mobileMenu={mobileMenu}
-      nav={publicNav}
-      bottomNav={[
-        { href: '/', label: 'Home', icon: HomeIcon },
-        { href: '/network', label: 'My Network', icon: Users },
-        { href: '/calendar', label: 'Calender', icon: Calendar },
-        { href: '/notifications', label: 'Notification', icon: Bell },
-        { href: '/dashboard/settings', label: 'Profile', icon: UserCircle },
-      ]}
-      headerLeft={
-        <div className="w-full flex items-center gap-3 min-w-0">
-          <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 bg-white p-1 flex items-center justify-center">
-            <Image src="/SkillSwap_Logo.jpg" alt="SkillSwap" width={32} height={32} className="object-contain" />
-          </div>
+    <header className="h-16 bg-white border-b border-skillswap-200 flex items-center justify-between px-4 sm:px-6"><div className="flex items-center gap-2"><button className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 !bg-gradient-to-r !from-white !to-skillswap-200 !text-skillswap-dark hover:to-skillswap-100 h-10 w-10 text-skillswap-600 lg:hidden" type="button" aria-label="Menu"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-menu h-5 w-5"><line x1="4" x2="20" y1="12" y2="12"></line><line x1="4" x2="20" y1="6" y2="6"></line><line x1="4" x2="20" y1="18" y2="18"></line></svg></button><div className="min-w-0"><div className="w-full flex items-center gap-3 min-w-0"><div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 bg-white p-1 flex items-center justify-center"><img alt="SkillSwap" loading="lazy" width="32" height="32" decoding="async" data-nimg="1" className="object-contain" src="/SkillSwap_Logo.jpg" style={{ color: 'transparent' }} /></div><div className="flex-1 min-w-0 flex justify-center"><div className="w-full max-w-2xl relative"><input aria-label="Search swaps" placeholder="Search Swaps" className="mobile-header-search pl-10 w-full" value="" /></div></div><div className="flex items-center gap-2 flex-shrink-0"><button aria-label="Notifications" title="Notifications" className="h-10 w-10 rounded-full bg-white flex items-center justify-center shadow-sm"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-bell h-5 w-5 text-skillswap-600"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg></button></div></div></div></div><div className="flex items-center gap-1 sm:gap-2"></div></header>
 
-          <div className="flex-1 min-w-0 flex justify-center">
-            <div className="w-full max-w-2xl relative">
-              <input
-                aria-label="Search swaps"
-                placeholder="Search Swaps"
-                className="mobile-header-search pl-10 w-full"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-              />
+      <AppShell
+        showSidebar={false}
+        mobileMenu={mobileMenu}
+        nav={publicNav}
+        bottomNav={[
+          { href: '/', label: 'Home', icon: HomeIcon },
+          { href: '/network', label: 'My Network', icon: Users },
+          { href: '/calendar', label: 'Calender', icon: Calendar },
+          { href: '/notifications', label: 'Notification', icon: Bell },
+          { href: '/dashboard/settings', label: 'Profile', icon: UserCircle },
+        ]}
+        headerLeft={
+          <div className="w-full flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 bg-white p-1 flex items-center justify-center">
+              <Image src="/SkillSwap_Logo.jpg" alt="SkillSwap" width={32} height={32} className="object-contain" />
             </div>
-          </div>
 
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <button
-              aria-label="Notifications"
-              title="Notifications"
-              onClick={() => router.push('/notifications')}
-              className="h-10 w-10 rounded-full bg-white flex items-center justify-center shadow-sm"
-            >
-              <Bell className="h-5 w-5 text-skillswap-600" />
-            </button>
-            {!user && (
+            <div className="flex-1 min-w-0 flex justify-center">
+              <div className="w-full max-w-2xl relative">
+                <input
+                  aria-label="Search swaps"
+                  placeholder="Search Swaps"
+                  className="mobile-header-search pl-10 w-full"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 flex-shrink-0">
               <button
-                onClick={() => router.push('/login')}
-                className="px-3 h-10 rounded-full bg-skillswap-500 text-white hover:bg-skillswap-600 text-sm"
+                aria-label="Notifications"
+                title="Notifications"
+                onClick={() => router.push('/notifications')}
+                className="h-10 w-10 rounded-full bg-white flex items-center justify-center shadow-sm"
               >
-                Login
+                <Bell className="h-5 w-5 text-skillswap-600" />
               </button>
-            )}
-          </div>
-        </div>
-      }
-    >
-      <div className="w-full max-w-[1200px] mx-auto lg:grid lg:grid-cols-[280px_1fr_320px] lg:gap-6">
-        {/* Left column - profile (desktop only) */}
-        <aside className="hidden lg:block">
-          <div className="feed-card">
-              <div className="flex items-center gap-3">
-                <div className="w-16 h-16 rounded-full overflow-hidden">
-                  <UserAvatar userId={user?.id || ''} explicitName={meProfile?.full_name} explicitAvatar={meSettings?.avatar_url as string | null} size="h-16 w-16" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-semibold text-skillswap-800"><UserName userId={user?.id || ''} explicitName={meProfile?.full_name} /></h2>
-                  <p className="text-sm text-skillswap-600">
-                    {meSettings?.headline || meSettings?.current_title || 'Complete your profile to get better matches'}
-                  </p>
-                </div>
-              </div>
-            
-            <div className="mt-4">
-              <div className="flex justify-between text-sm text-skillswap-600">
-                  <div>Number of swaps</div>
-                  <div className="font-semibold text-skillswap-800">{sidebarCounts.swaps}</div>
-                </div>
-                <div className="flex justify-between mt-2 text-sm text-skillswap-600">
-                  <div>Swaps posted</div>
-                  <div className="font-semibold text-skillswap-800">{sidebarCounts.posted}</div>
-                </div>
+              {!user && (
+                <button
+                  onClick={() => router.push('/login')}
+                  className="px-3 h-10 rounded-full bg-skillswap-500 text-white hover:bg-skillswap-600 text-sm"
+                >
+                  Login
+                </button>
+              )}
             </div>
-            <div className="mt-4 border-t border-skillswap-200 pt-3 space-y-2 text-sm">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="w-3 h-3 bg-skillswap-300 rounded-sm" />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowMatchedSwapsCenter((v) => !v);
-                      // keep behavior consistent with other sidebar actions
-                      const feedEl = document.querySelector('section.space-y-6');
-                      if (feedEl) feedEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    }}
-                    aria-expanded={showMatchedSwapsCenter}
-                    className="flex items-center gap-2"
-                  >
-                    <span className="font-medium">Matched Swaps</span>
-                    {matchedDetails.length > 0 && (
-                      <span className="text-xs bg-skillswap-100 text-skillswap-700 rounded-full px-2 py-0.5">{matchedDetails.length}</span>
-                    )}
-                  </button>
+          </div>
+        }
+      >
+        <div className="w-full max-w-[1200px] mx-auto lg:grid lg:grid-cols-[280px_1fr_320px] lg:gap-6">
+          {/* Left column - profile (desktop only) */}
+          <aside className="hidden lg:block">
+            <div className="feed-card">
+                <div className="flex items-center gap-3">
+                  <div className="w-16 h-16 rounded-full overflow-hidden">
+                    <UserAvatar userId={user?.id || ''} explicitName={meProfile?.full_name} explicitAvatar={meSettings?.avatar_url as string | null} size="h-16 w-16" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-skillswap-800"><UserName userId={user?.id || ''} explicitName={meProfile?.full_name} /></h2>
+                    <p className="text-sm text-skillswap-600">
+                      {meSettings?.headline || meSettings?.current_title || 'Complete your profile to get better matches'}
+                    </p>
+                  </div>
                 </div>
+              
+              <div className="mt-4">
+                <div className="flex justify-between text-sm text-skillswap-600">
+                    <div>Number of swaps</div>
+                    <div className="font-semibold text-skillswap-800">{sidebarCounts.swaps}</div>
+                  </div>
+                  <div className="flex justify-between mt-2 text-sm text-skillswap-600">
+                    <div>Swaps posted</div>
+                    <div className="font-semibold text-skillswap-800">{sidebarCounts.posted}</div>
+                  </div>
               </div>
+              <div className="mt-4 border-t border-skillswap-200 pt-3 space-y-2 text-sm">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 bg-skillswap-300 rounded-sm" />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowMatchedSwapsCenter((v) => !v);
+                        // keep behavior consistent with other sidebar actions
+                        const feedEl = document.querySelector('section.space-y-6');
+                        if (feedEl) feedEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }}
+                      aria-expanded={showMatchedSwapsCenter}
+                      className="flex items-center gap-2"
+                    >
+                      <span className="font-medium">Matched Swaps</span>
+                      {matchedDetails.length > 0 && (
+                        <span className="text-xs bg-skillswap-100 text-skillswap-700 rounded-full px-2 py-0.5">{matchedDetails.length}</span>
+                      )}
+                    </button>
+                  </div>
+                </div>
 
-              {matchedDetails.length === 0 ? (
-                notificationSavedSkills.length === 0 ? (
-                  <div className="ml-1 text-xs text-skillswap-500">No matches yet</div>
-                ) : (
-                  <div className="mt-2 space-y-2">
-                    {notificationSavedSkills.map((s) => (
-                      <div key={s.id} className="bg-white border border-skillswap-200 rounded-lg px-3 py-2">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="text-sm font-medium text-skillswap-800 truncate">{s.name}</div>
-                            {s.type ? <div className="text-[11px] text-skillswap-500 truncate">{s.type}</div> : null}
+                {matchedDetails.length === 0 ? (
+                  notificationSavedSkills.length === 0 ? (
+                    <div className="ml-1 text-xs text-skillswap-500">No matches yet</div>
+                  ) : (
+                    <div className="mt-2 space-y-2">
+                      {notificationSavedSkills.map((s) => (
+                        <div key={s.id} className="bg-white border border-skillswap-200 rounded-lg px-3 py-2">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="text-sm font-medium text-skillswap-800 truncate">{s.name}</div>
+                              {s.type ? <div className="text-[11px] text-skillswap-500 truncate">{s.type}</div> : null}
+                            </div>
+                            {s.created_at ? (
+                              <time className="text-[11px] text-skillswap-500 flex-shrink-0" dateTime={s.created_at}>
+                                {formatExactDateTime(s.created_at)}
+                              </time>
+                            ) : null}
                           </div>
-                          {s.created_at ? (
-                            <time className="text-[11px] text-skillswap-500 flex-shrink-0" dateTime={s.created_at}>
-                              {formatExactDateTime(s.created_at)}
-                            </time>
-                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  )
+                ) : (
+                  <div className="mt-2 space-y-3">
+                    {matchedDetails.slice(0, 6).map((m) => (
+                      <div key={`${m.teacher_id}-${m.teach_skill_id}`} className="bg-white border border-skillswap-200 rounded-lg p-3">
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-start gap-3">
+                            <div className="w-12 h-12 rounded-full overflow-hidden">
+                              <UserAvatar userId={m.teacher_id} explicitName={m.teacher?.full_name} explicitAvatar={m.teacherSettings?.avatar_url as string | null} />
+                            </div>
+                            <div>
+                              <div className="font-semibold text-sm text-skillswap-800"><UserName userId={m.teacher_id} explicitName={m.teacher?.full_name} /></div>
+                              {m.teacher_id && ratingsByUser[m.teacher_id] ? (
+                                <div className="text-xs text-skillswap-500 mt-0.5">★ {ratingsByUser[m.teacher_id].avg.toFixed(1)} ({ratingsByUser[m.teacher_id].count})</div>
+                              ) : null}
+                              <p className="text-xs text-skillswap-600 mt-1">
+                                {m.teacherSettings?.headline || m.teacherSettings?.current_title || m.teacherSettings?.current_company || m.teacher?.bio || ''}
+                              </p>
+                            </div>
+                          </div>
+                          <time
+                            className="text-xs text-skillswap-500"
+                            dateTime={m.created_at || undefined}
+                            title={m.created_at ? formatExactDateTimeWithSeconds(m.created_at) : undefined}
+                          >
+                            {m.created_at ? formatExactDateTime(m.created_at) : ''}
+                          </time>
+                        </div>
+
+                        <div className="mt-3 text-sm text-skillswap-700">
+                          <p className="font-medium text-skillswap-800">Skills</p>
+                          <ul className="mt-1 space-y-1">
+                            <li className="flex items-center justify-between">
+                              <span className="truncate">{m.teachSkill?.name || m.skill}</span>
+                              <span className="text-xs text-skillswap-500">{m.teachSkill?.proficiency_level || ''}</span>
+                            </li>
+                          </ul>
+                        </div>
+
+                        <div className="mt-3 flex gap-3">
+                          <button
+                            onClick={() => {
+                              // set selected post to show inline
+                              setSelectedPostId(m.teach_skill_id);
+                              setSelectedPostFallback(m);
+                              setShowMatchedSwapsCenter(false);
+                              // scroll to center feed area
+                              const feedEl = document.querySelector('section.space-y-6');
+                              if (feedEl) feedEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            }}
+                            className="btn-outline-rounded"
+                          >
+                            View Swap Post
+                          </button>
+                          <button
+                            onClick={() => {
+                              // open availability modal like other request buttons
+                              // prefer to pass the teachSkill object if available
+                              const skillObj = m.teachSkill ? { id: m.teachSkill.id, name: m.teachSkill.name, skill_type: 'teach', proficiency_level: m.teachSkill.proficiency_level } : undefined;
+                              openAvailabilityModal(m.teacher_id, skillObj as any);
+                            }}
+                            className="btn-primary-rounded"
+                          >
+                            Send Request
+                          </button>
                         </div>
                       </div>
                     ))}
                   </div>
-                )
-              ) : (
-                <div className="mt-2 space-y-3">
-                  {matchedDetails.slice(0, 6).map((m) => (
-                    <div key={`${m.teacher_id}-${m.teach_skill_id}`} className="bg-white border border-skillswap-200 rounded-lg p-3">
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-start gap-3">
-                          <div className="w-12 h-12 rounded-full overflow-hidden">
-                            <UserAvatar userId={m.teacher_id} explicitName={m.teacher?.full_name} explicitAvatar={m.teacherSettings?.avatar_url as string | null} />
-                          </div>
-                          <div>
-                            <div className="font-semibold text-sm text-skillswap-800"><UserName userId={m.teacher_id} explicitName={m.teacher?.full_name} /></div>
-                            {m.teacher_id && ratingsByUser[m.teacher_id] ? (
-                              <div className="text-xs text-skillswap-500 mt-0.5">★ {ratingsByUser[m.teacher_id].avg.toFixed(1)} ({ratingsByUser[m.teacher_id].count})</div>
-                            ) : null}
-                            <p className="text-xs text-skillswap-600 mt-1">
-                              {m.teacherSettings?.headline || m.teacherSettings?.current_title || m.teacherSettings?.current_company || m.teacher?.bio || ''}
-                            </p>
-                          </div>
-                        </div>
-                        <time
-                          className="text-xs text-skillswap-500"
-                          dateTime={m.created_at || undefined}
-                          title={m.created_at ? formatExactDateTimeWithSeconds(m.created_at) : undefined}
-                        >
-                          {m.created_at ? formatExactDateTime(m.created_at) : ''}
-                        </time>
-                      </div>
-
-                      <div className="mt-3 text-sm text-skillswap-700">
-                        <p className="font-medium text-skillswap-800">Skills</p>
-                        <ul className="mt-1 space-y-1">
-                          <li className="flex items-center justify-between">
-                            <span className="truncate">{m.teachSkill?.name || m.skill}</span>
-                            <span className="text-xs text-skillswap-500">{m.teachSkill?.proficiency_level || ''}</span>
-                          </li>
-                        </ul>
-                      </div>
-
-                      <div className="mt-3 flex gap-3">
-                        <button
-                          onClick={() => {
-                            // set selected post to show inline
-                            setSelectedPostId(m.teach_skill_id);
-                            setSelectedPostFallback(m);
-                            setShowMatchedSwapsCenter(false);
-                            // scroll to center feed area
-                            const feedEl = document.querySelector('section.space-y-6');
-                            if (feedEl) feedEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                          }}
-                          className="btn-outline-rounded"
-                        >
-                          View Swap Post
-                        </button>
-                        <button
-                          onClick={() => {
-                            // open availability modal like other request buttons
-                            // prefer to pass the teachSkill object if available
-                            const skillObj = m.teachSkill ? { id: m.teachSkill.id, name: m.teachSkill.name, skill_type: 'teach', proficiency_level: m.teachSkill.proficiency_level } : undefined;
-                            openAvailabilityModal(m.teacher_id, skillObj as any);
-                          }}
-                          className="btn-primary-rounded"
-                        >
-                          Send Request
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </aside>
-
-        {/* Center feed */}
-        <section className="space-y-6">
-
-          {/* Matched swaps (mini post cards) */}
-          {!selectedPostId && showMatchedSwapsCenter && matchedDetails.length > 0 && (
-            <div className="feed-card">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-skillswap-800">Matched Swaps</h3>
-                <span className="text-xs bg-skillswap-100 text-skillswap-700 rounded-full px-2 py-0.5">{matchedDetails.length}</span>
+                )}
               </div>
+            </div>
+          </aside>
 
-              <div className="mt-3 grid grid-cols-1 gap-3">
-                {matchedDetails.slice(0, 6).map((m) => {
-                  const name =
-                    m.teacherSettings?.display_name ||
-                    m.teacherSettings?.username ||
-                    m.teacher?.full_name ||
-                    'User';
-                  const subtitle = m.teacherSettings?.headline || m.teacherSettings?.current_title || m.teacherSettings?.current_company || m.teacher?.bio || '';
-                  const skillName = m.teachSkill?.name || m.skill || 'Skill';
-                  const prof = m.teachSkill?.proficiency_level || '';
-                  const rating = m.teacher_id ? ratingsByUser[m.teacher_id] : null;
-                  return (
-                    <article key={`matched-mini-${m.teacher_id}-${m.teach_skill_id}`} className="bg-white border border-skillswap-200 rounded-lg p-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-start gap-3 min-w-0">
+          {/* Center feed */}
+          <section className="space-y-6">
+
+            {/* Matched swaps (mini post cards) */}
+            {!selectedPostId && showMatchedSwapsCenter && matchedDetails.length > 0 && (
+              <div className="feed-card">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-skillswap-800">Matched Swaps</h3>
+                  <span className="text-xs bg-skillswap-100 text-skillswap-700 rounded-full px-2 py-0.5">{matchedDetails.length}</span>
+                </div>
+
+                <div className="mt-3 grid grid-cols-1 gap-3">
+                  {matchedDetails.slice(0, 6).map((m) => {
+                    const name =
+                      m.teacherSettings?.display_name ||
+                      m.teacherSettings?.username ||
+                      m.teacher?.full_name ||
+                      'User';
+                    const subtitle = m.teacherSettings?.headline || m.teacherSettings?.current_title || m.teacherSettings?.current_company || m.teacher?.bio || '';
+                    const skillName = m.teachSkill?.name || m.skill || 'Skill';
+                    const prof = m.teachSkill?.proficiency_level || '';
+                    const rating = m.teacher_id ? ratingsByUser[m.teacher_id] : null;
+                    return (
+                      <article key={`matched-mini-${m.teacher_id}-${m.teach_skill_id}`} className="bg-white border border-skillswap-200 rounded-lg p-3">
+                        <div className="flex items-start gap-3">
                           <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
                             <UserAvatar userId={m.teacher_id} explicitName={m.teacherSettings?.display_name || m.teacherSettings?.username || m.teacher?.full_name} explicitAvatar={m.teacherSettings?.avatar_url as string | null} size="h-10 w-10" />
                           </div>
-                          <div className="min-w-0">
+                          <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
                               <div className="font-semibold text-sm text-skillswap-800 truncate">{name}</div>
                               <span className="text-[11px] bg-skillswap-100 text-skillswap-700 rounded-full px-2 py-0.5">Matched</span>
@@ -1212,262 +1213,259 @@ export default function Home() {
                             {subtitle ? <p className="text-xs text-skillswap-600 mt-0.5 truncate">{subtitle}</p> : null}
                           </div>
                         </div>
-                      </div>
-
-                      <div className="mt-3 text-sm text-skillswap-700">
-                        <p className="text-xs font-medium text-skillswap-800">Skills</p>
-                        <ul className="mt-1 space-y-1">
-                          <li className="flex items-center justify-between gap-3">
-                            <span className="truncate">{skillName}</span>
-                            <span className="text-xs text-skillswap-500 flex-shrink-0">{prof}</span>
-                          </li>
-                        </ul>
-                      </div>
-
-                      <div className="mt-3 flex gap-3 flex-wrap">
-                        <button
-                          onClick={() => {
-                            setSelectedPostId(m.teach_skill_id);
-                            setSelectedPostFallback(m);
-                            setShowMatchedSwapsCenter(false);
-                            const feedEl = document.querySelector('section.space-y-6');
-                            if (feedEl) feedEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                          }}
-                          className="btn-outline-rounded"
-                        >
-                          View Swap Post
-                        </button>
-                        <button
-                          onClick={() => {
-                            const skillObj = m.teachSkill
-                              ? { id: m.teachSkill.id, name: m.teachSkill.name, skill_type: 'teach', proficiency_level: m.teachSkill.proficiency_level }
-                              : undefined;
-                            openAvailabilityModal(m.teacher_id, skillObj as any);
-                          }}
-                          className="btn-primary-rounded"
-                        >
-                          Send Request
-                        </button>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-          
-
-          
-
-          {error && (
-            <div className="feed-card border-destructive/30 bg-destructive/10">
-              <p className="text-sm text-destructive">{error}</p>
-            </div>
-          )}
-
-          {loading ? (
-            <div className="feed-card">
-              <div className="w-10 h-10 border-4 border-skillswap-200 border-t-skillswap-500 rounded-full animate-spin" />
-            </div>
-          ) : selectedPostId ? (
-            <PostDetail
-              skillId={selectedPostId}
-              fallbackSkill={selectedPostFallback?.teachSkill ?? (selectedPostFallback ? { id: selectedPostFallback.teach_skill_id, name: selectedPostFallback.skill, description: selectedPostFallback.description ?? null, proficiency_level: selectedPostFallback.proficiency_level ?? null, user_id: selectedPostFallback.teacher_id } : undefined)}
-              fallbackOwner={selectedPostFallback?.teacher ?? null}
-            />
-          ) : (
-            (() => {
-              const postedSwaps = filteredFeed.flatMap((owner) =>
-                owner.skills.map((skill) => ({ owner, skill }))
-              ).sort((a, b) => {
-                const aTs = a.skill.created_at ? new Date(a.skill.created_at).getTime() : 0;
-                const bTs = b.skill.created_at ? new Date(b.skill.created_at).getTime() : 0;
-                return bTs - aTs;
-              });
-
-              // Group skills by owner + created_at so pairs inserted together show as one post
-              const groups: Array<{ owner: FeedOwner; skills: Skill[]; ts?: string | null }> = [];
-              const map = new Map<string, { owner: FeedOwner; skills: Skill[]; ts?: string | null }>();
-              for (const { owner, skill } of postedSwaps) {
-                const key = `${owner.id}|${skill.created_at ?? ''}`;
-                if (!map.has(key)) {
-                  const g = { owner, skills: [], ts: skill.created_at };
-                  map.set(key, g);
-                  groups.push(g);
-                }
-                map.get(key)!.skills.push(skill);
-              }
-
-              return groups.map((g, gi) => {
-                return (
-                  <article key={`${g.owner.id}-${gi}-${g.ts || ''}`} className="feed-card">
-                    <div className="flex items-start gap-3">
-                      <div className="w-12 h-12 rounded-full overflow-hidden">
-                        <UserAvatar userId={g.owner.id} explicitName={g.owner.profile?.full_name} explicitAvatar={g.owner.settings?.avatar_url as string | null} />
-                      </div>
-
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h3 className="font-semibold text-skillswap-800">
-                              <UserName userId={g.owner.id} explicitName={g.owner.profile?.full_name} />
-                            </h3>
-                            {ratingsByUser[g.owner.id] ? (
-                              <div className="text-xs text-skillswap-500 mt-0.5">★ {ratingsByUser[g.owner.id].avg.toFixed(1)} ({ratingsByUser[g.owner.id].count})</div>
-                            ) : null}
-                          </div>
-                          <time
-                            className="text-xs text-skillswap-500"
-                            dateTime={g.ts || undefined}
-                            title={g.ts ? formatExactDateTimeWithSeconds(g.ts) : undefined}
-                          >
-                            {g.ts ? formatExactDateTime(g.ts) : ''}
-                          </time>
-                        </div>
 
                         <div className="mt-3 text-sm text-skillswap-700">
-                          <p className="font-medium text-skillswap-800">Skills</p>
+                          <p className="text-xs font-medium text-skillswap-800">Skills</p>
                           <ul className="mt-1 space-y-1">
-                            {g.skills.map((skill) => (
-                              <li key={skill.id} className="flex items-center justify-between gap-3">
-                                <span className="truncate">{skill.skill_type === 'teach' ? 'Teaches' : 'Learns'}: {skill.name}</span>
-                                <span className="text-xs text-skillswap-500 flex-shrink-0">{skill.proficiency_level}</span>
-                              </li>
-                            ))}
+                            <li className="flex items-center justify-between gap-3">
+                              <span className="truncate">{skillName}</span>
+                              <span className="text-xs text-skillswap-500 flex-shrink-0">{prof}</span>
+                            </li>
                           </ul>
                         </div>
 
-                        <div className="mt-4 flex flex-wrap gap-3">
-                          <button className="btn-outline-rounded" onClick={() => router.push(`/profile/${g.owner.id}`)}>View Profile</button>
+                        <div className="mt-3 flex gap-3 flex-wrap">
                           <button
-                            className="btn-outline-rounded"
                             onClick={() => {
-                              const postId = g.skills?.[0]?.id;
-                              const shareKey = `${g.owner.id}|${g.ts || ''}|${postId || ''}`;
-                              const label = g.owner.profile?.full_name || 'this member';
-                              void sharePost(postId, label, shareKey);
+                              setSelectedPostId(m.teach_skill_id);
+                              setSelectedPostFallback(m);
+                              setShowMatchedSwapsCenter(false);
+                              const feedEl = document.querySelector('section.space-y-6');
+                              if (feedEl) feedEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
                             }}
+                            className="btn-outline-rounded"
                           >
-                            {(() => {
-                              const postId = g.skills?.[0]?.id;
-                              const shareKey = `${g.owner.id}|${g.ts || ''}|${postId || ''}`;
-                              return copiedShareKey === shareKey ? 'Link copied' : 'Share';
-                            })()}
+                            View Swap Post
                           </button>
-                          {g.skills.map((skill) => {
-                            const pending = skill.id ? (requestsBySkillId[skill.id] || []).some((r) => r.requester_id === user?.id && r.recipient_id === g.owner.id && r.status === 'pending') : false;
-                            const isSending = Boolean(sending[skill.id || g.owner.id]);
-                            return (
-                              <button
-                                key={skill.id}
-                                className="btn-primary-rounded"
-                                disabled={!skill?.id || pending || isSending}
-                                onClick={() => skill?.id && openAvailabilityModal(g.owner.id, skill)}
-                              >
-                                {pending ? 'Request Sent' : isSending ? 'Sending...' : `Request: ${skill.name}`}
-                              </button>
-                            );
-                          })}
+                          <button
+                            onClick={() => {
+                              const skillObj = m.teachSkill
+                                ? { id: m.teachSkill.id, name: m.teachSkill.name, skill_type: 'teach', proficiency_level: m.teachSkill.proficiency_level }
+                                : undefined;
+                              openAvailabilityModal(m.teacher_id, skillObj as any);
+                            }}
+                            className="btn-primary-rounded"
+                          >
+                            Send Request
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            
+
+            {error && (
+              <div className="feed-card border-destructive/30 bg-destructive/10">
+                <p className="text-sm text-destructive">{error}</p>
+              </div>
+            )}
+
+            {loading ? (
+              <div className="feed-card">
+                <div className="w-10 h-10 border-4 border-skillswap-200 border-t-skillswap-500 rounded-full animate-spin" />
+              </div>
+            ) : selectedPostId ? (
+              <PostDetail
+                skillId={selectedPostId}
+                fallbackSkill={selectedPostFallback?.teachSkill ?? (selectedPostFallback ? { id: selectedPostFallback.teach_skill_id, name: selectedPostFallback.skill, description: selectedPostFallback.description ?? null, proficiency_level: selectedPostFallback.proficiency_level ?? null, user_id: selectedPostFallback.teacher_id } : undefined)}
+                fallbackOwner={selectedPostFallback?.teacher ?? null}
+              />
+            ) : (
+              (() => {
+                const postedSwaps = filteredFeed.flatMap((owner) =>
+                  owner.skills.map((skill) => ({ owner, skill }))
+                ).sort((a, b) => {
+                  const aTs = a.skill.created_at ? new Date(a.skill.created_at).getTime() : 0;
+                  const bTs = b.skill.created_at ? new Date(b.skill.created_at).getTime() : 0;
+                  return bTs - aTs;
+                });
+
+                // Group skills by owner + created_at so pairs inserted together show as one post
+                const groups: Array<{ owner: FeedOwner; skills: Skill[]; ts?: string | null }> = [];
+                const map = new Map<string, { owner: FeedOwner; skills: Skill[]; ts?: string | null }>();
+                for (const { owner, skill } of postedSwaps) {
+                  const key = `${owner.id}|${skill.created_at ?? ''}`;
+                  if (!map.has(key)) {
+                    const g = { owner, skills: [], ts: skill.created_at };
+                    map.set(key, g);
+                    groups.push(g);
+                  }
+                  map.get(key)!.skills.push(skill);
+                }
+
+                return groups.map((g, gi) => {
+                  return (
+                    <article key={`${g.owner.id}-${gi}-${g.ts || ''}`} className="feed-card">
+                      <div className="flex items-start gap-3">
+                        <div className="w-12 h-12 rounded-full overflow-hidden">
+                          <UserAvatar userId={g.owner.id} explicitName={g.owner.profile?.full_name} explicitAvatar={g.owner.settings?.avatar_url as string | null} />
+                        </div>
+
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <h3 className="font-semibold text-skillswap-800">
+                                <UserName userId={g.owner.id} explicitName={g.owner.profile?.full_name} />
+                              </h3>
+                              {ratingsByUser[g.owner.id] ? (
+                                <div className="text-xs text-skillswap-500 mt-0.5">★ {ratingsByUser[g.owner.id].avg.toFixed(1)} ({ratingsByUser[g.owner.id].count})</div>
+                              ) : null}
+                            </div>
+                            <time
+                              className="text-xs text-skillswap-500"
+                              dateTime={g.ts || undefined}
+                              title={g.ts ? formatExactDateTimeWithSeconds(g.ts) : undefined}
+                            >
+                              {g.ts ? formatExactDateTime(g.ts) : ''}
+                            </time>
+                          </div>
+
+                          <div className="mt-3 text-sm text-skillswap-700">
+                            <p className="font-medium text-skillswap-800">Skills</p>
+                            <ul className="mt-1 space-y-1">
+                              {g.skills.map((skill) => (
+                                <li key={skill.id} className="flex items-center justify-between gap-3">
+                                  <span className="truncate">{skill.skill_type === 'teach' ? 'Teaches' : 'Learns'}: {skill.name}</span>
+                                  <span className="text-xs text-skillswap-500 flex-shrink-0">{skill.proficiency_level}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+
+                          <div className="mt-4 flex flex-wrap gap-3">
+                            <button className="btn-outline-rounded" onClick={() => router.push(`/profile/${g.owner.id}`)}>View Profile</button>
+                            <button
+                              className="btn-outline-rounded"
+                              onClick={() => {
+                                const postId = g.skills?.[0]?.id;
+                                const shareKey = `${g.owner.id}|${g.ts || ''}|${postId || ''}`;
+                                const label = g.owner.profile?.full_name || 'this member';
+                                void sharePost(postId, label, shareKey);
+                              }}
+                            >
+                              {(() => {
+                                const postId = g.skills?.[0]?.id;
+                                const shareKey = `${g.owner.id}|${g.ts || ''}|${postId || ''}`;
+                                return copiedShareKey === shareKey ? 'Link copied' : 'Share';
+                              })()}
+                            </button>
+                            {g.skills.map((skill) => {
+                              const pending = skill.id ? (requestsBySkillId[skill.id] || []).some((r) => r.requester_id === user?.id && r.recipient_id === g.owner.id && r.status === 'pending') : false;
+                              const isSending = Boolean(sending[skill.id || g.owner.id]);
+                              return (
+                                <button
+                                  key={skill.id}
+                                  className="btn-primary-rounded"
+                                  disabled={!skill?.id || pending || isSending}
+                                  onClick={() => skill?.id && openAvailabilityModal(g.owner.id, skill)}
+                                >
+                                  {pending ? 'Request Sent' : isSending ? 'Sending...' : `Request: ${skill.name}`}
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </article>
-                );
-              });
-            })()
-          )}
-        </section>
+                    </article>
+                  );
+                });
+              })()
+            )}
+          </section>
 
-        {/* Right column - stats & recommendations (desktop only) */}
-        <aside className="hidden lg:block">
-          <div className="feed-card">
-            {/* Stats row */}
-            <div className="flex gap-6">
-              <div>
-                <div className="text-2xl font-bold text-skillswap-700">{sidebarCounts.swapRequests}</div>
-                <div className="text-sm text-skillswap-600">Swap Request</div>
+          {/* Right column - stats & recommendations (desktop only) */}
+          <aside className="hidden lg:block">
+            <div className="feed-card">
+              {/* Stats row */}
+              <div className="flex gap-6">
+                <div>
+                  <div className="text-2xl font-bold text-skillswap-700">{sidebarCounts.swapRequests}</div>
+                  <div className="text-sm text-skillswap-600">Swap Request</div>
+                </div>
               </div>
-            </div>
 
-            {/* Recommended swaps */}
-            <div className="mt-5 border-t border-skillswap-200 pt-4">
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-skillswap-600">
-                  {matchedDetails.length} Swap profile recommended for you
-                </p>
-                {matchedDetails.length > 0 && (
-                  <button
-                    onClick={() => setShowMatchedSwapsCenter(true)}
-                    className="text-xs font-medium text-skillswap-600 border border-skillswap-300 rounded-full px-3 py-1 hover:bg-skillswap-50 transition-colors"
-                  >
-                    View all
-                  </button>
+              {/* Recommended swaps */}
+              <div className="mt-5 border-t border-skillswap-200 pt-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-skillswap-600">
+                    {matchedDetails.length} Swap profile recommended for you
+                  </p>
+                  {matchedDetails.length > 0 && (
+                    <button
+                      onClick={() => setShowMatchedSwapsCenter(true)}
+                      className="text-xs font-medium text-skillswap-600 border border-skillswap-300 rounded-full px-3 py-1 hover:bg-skillswap-50 transition-colors"
+                    >
+                      View all
+                    </button>
+                  )}
+                </div>
+
+                <ul className="mt-4 space-y-4">
+                  {matchedDetails.slice(0, 4).map((m) => (
+                    <li key={`${m.teacher_id}-${m.teach_skill_id}`} className="flex items-center gap-3">
+                      <UserAvatar userId={m.teacher_id} explicitName={m.teacher?.full_name} explicitAvatar={m.teacherSettings?.avatar_url as string | null} size="h-10 w-10 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm text-skillswap-800 truncate">
+                          {m.teacherSettings?.current_title || m.teachSkill?.name || m.skill || 'Skill Swap'}
+                        </div>
+                        <div className="text-xs text-skillswap-500 truncate">
+                          {m.teacherSettings?.current_company || m.teacher?.full_name || ''}
+                          {m.teachSkill?.proficiency_level ? ` · ${m.teachSkill.proficiency_level}` : ''}
+                        </div>
+                      </div>
+                      <time
+                        className="text-xs text-skillswap-400 flex-shrink-0"
+                        dateTime={m.created_at || undefined}
+                      >
+                        {m.created_at ? (() => { const diff = Date.now() - new Date(m.created_at).getTime(); const mins = Math.floor(diff / 60000); if (mins < 60) return `${mins}min`; const hrs = Math.floor(mins / 60); if (hrs < 24) return `${hrs}h`; return `${Math.floor(hrs / 24)}d`; })() : ''}
+                      </time>
+                    </li>
+                  ))}
+                </ul>
+
+                {matchedDetails.length === 0 && (
+                  <p className="mt-3 text-sm text-skillswap-500">No recommendations yet.</p>
                 )}
               </div>
-
-              <ul className="mt-4 space-y-4">
-                {matchedDetails.slice(0, 4).map((m) => (
-                  <li key={`${m.teacher_id}-${m.teach_skill_id}`} className="flex items-center gap-3">
-                    <UserAvatar userId={m.teacher_id} explicitName={m.teacher?.full_name} explicitAvatar={m.teacherSettings?.avatar_url as string | null} size="h-10 w-10 flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm text-skillswap-800 truncate">
-                        {m.teacherSettings?.current_title || m.teachSkill?.name || m.skill || 'Skill Swap'}
-                      </div>
-                      <div className="text-xs text-skillswap-500 truncate">
-                        {m.teacherSettings?.current_company || m.teacher?.full_name || ''}
-                        {m.teachSkill?.proficiency_level ? ` · ${m.teachSkill.proficiency_level}` : ''}
-                      </div>
-                    </div>
-                    <time
-                      className="text-xs text-skillswap-400 flex-shrink-0"
-                      dateTime={m.created_at || undefined}
-                    >
-                      {m.created_at ? (() => { const diff = Date.now() - new Date(m.created_at).getTime(); const mins = Math.floor(diff / 60000); if (mins < 60) return `${mins}min`; const hrs = Math.floor(mins / 60); if (hrs < 24) return `${hrs}h`; return `${Math.floor(hrs / 24)}d`; })() : ''}
-                    </time>
-                  </li>
-                ))}
-              </ul>
-
-              {matchedDetails.length === 0 && (
-                <p className="mt-3 text-sm text-skillswap-500">No recommendations yet.</p>
-              )}
             </div>
-          </div>
-        </aside>
-      </div>
-    </AppShell>
-      {/* Availability modal */}
-      {availModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-md bg-white rounded-lg p-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold">Request swap — {availModal.skill?.name ?? 'Skill'}</h3>
-              <button onClick={() => setAvailModal(null)} className="text-sm text-skillswap-600">Close</button>
-            </div>
-            <p className="text-xs text-skillswap-500 mt-2">Add your available times (add multiple). The recipient will see these and can request a reschedule.</p>
-
-            <div className="mt-3">
-              {/* Calendar-based availability picker */}
-              {/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */}
-              {/* @ts-ignore */}
-              <AvailabilityPicker
-                availabilities={availabilities}
-                note={sessionNote}
-                onNoteChange={setSessionNote}
-                durationMinutes={sessionDurationMinutes}
-                onDurationMinutesChange={setSessionDurationMinutes}
-                onAdd={(s: string) => setAvailabilities((prev) => [...prev, s].slice(0, 6))}
-                onRemove={(i: number) => setAvailabilities((prev) => prev.filter((_, idx) => idx !== i))}
-              />
-            </div>
-
-            <div className="mt-4 flex justify-end gap-2">
-              <button onClick={() => setAvailModal(null)} className="btn-ghost">Cancel</button>
-              <button onClick={submitAvailabilityRequest} className="btn-primary">Send request</button>
-            </div>
-          </div>
+          </aside>
         </div>
-      )}
+      </AppShell>
+        {/* Availability modal */}
+        {availModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+            <div className="w-full max-w-md bg-white rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold">Request swap — {availModal.skill?.name ?? 'Skill'}</h3>
+                <button onClick={() => setAvailModal(null)} className="text-sm text-skillswap-600">Close</button>
+              </div>
+              <p className="text-xs text-skillswap-500 mt-2">Add your available times (add multiple). The recipient will see these and can request a reschedule.</p>
+
+              <div className="mt-3">
+                {/* Calendar-based availability picker */}
+                {/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */}
+                {/* @ts-ignore */}
+                <AvailabilityPicker
+                  availabilities={availabilities}
+                  note={sessionNote}
+                  onNoteChange={setSessionNote}
+                  durationMinutes={sessionDurationMinutes}
+                  onDurationMinutesChange={setSessionDurationMinutes}
+                  onAdd={(s: string) => setAvailabilities((prev) => [...prev, s].slice(0, 6))}
+                  onRemove={(i: number) => setAvailabilities((prev) => prev.filter((_, idx) => idx !== i))}
+                />
+              </div>
+
+              <div className="mt-4 flex justify-end gap-2">
+                <button onClick={() => setAvailModal(null)} className="btn-ghost">Cancel</button>
+                <button onClick={submitAvailabilityRequest} className="btn-primary">Send request</button>
+              </div>
+            </div>
+          </div>
+        )}
     </>
   );
 }
